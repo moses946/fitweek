@@ -462,7 +462,7 @@ export default function PlannerScreen() {
 
     const slotGarments = slot.garmentIds
       .map((id) => garments.find((g) => g.id === id))
-      .filter((g): g is Garment => Boolean(g) && g.deletedAt === null);
+      .filter((g): g is Garment => g != null && g.deletedAt === null);
 
     const hero = selectHeroGarment(slotGarments);
     if (!hero) {
@@ -541,9 +541,10 @@ export default function PlannerScreen() {
       const FileSystem = await import("expo-file-system");
       const Sharing = await import("expo-sharing");
 
-      const fileUri = `${FileSystem.default.cacheDirectory}fitweek-outfits.ics`;
-      await FileSystem.default.writeAsStringAsync(fileUri, ics, {
-        encoding: FileSystem.default.EncodingType.UTF8,
+      const cacheDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
+      const fileUri = `${cacheDir}fitweek-outfits.ics`;
+      await FileSystem.writeAsStringAsync(fileUri, ics, {
+        encoding: "utf8",
       });
 
       const canShare = await Sharing.default.isAvailableAsync();
