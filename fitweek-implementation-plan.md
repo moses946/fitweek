@@ -27,7 +27,7 @@ FitWeek is a React Native mobile application. Expo is the framework that makes b
 
 Without Expo, each of these would require writing Objective-C/Swift (iOS) and Java/Kotlin (Android) native modules and configuring them through Xcode and Gradle — weeks of work per capability. Expo wraps all of it into JavaScript APIs that work across both platforms from a single codebase.
 
-**For the hackathon / demo**, no Expo account is needed. The app runs inside the free **Expo Go** client on a physical device or simulator — just scan a QR code. An Expo account (free tier) is only required if you later want to build a standalone `.ipa` or `.apk` binary for distribution via EAS Build. That is out of scope for v1.
+**For iOS (demo)**, the app runs inside **Expo Go** on a physical device — scan a QR code, no Apple Developer account needed. **For Android**, an Expo account is available and EAS Build will produce a real standalone APK distributed via an internal distribution link. No Apple Developer account means no standalone iOS binary for v1; Expo Go is the iOS demo target throughout.
 
 ---
 
@@ -108,7 +108,9 @@ Test 4: given a response where subcategory = 'dress'
 | API keys | Owner provides all keys after the infra agent creates the `.env` file with placeholder entries |
 | Garment classification | Vision LLM (GPT-4o / Gemini) replaces Roboflow. See "Intelligent Garment Labeling" section above |
 | HF Pro access | Not available. VTO uses the free IDM-VTON Space with a visible loading state and explicit cold-start warning in UI. No queue-jumping; graceful error handling if the Space is unavailable |
-| Expo account | Not required for v1. App runs in Expo Go for demo. EAS Build deferred |
+| Expo account | Available (owner-provided). Used for EAS Build (Android APK) and EAS Secrets |
+| Apple Developer account | Not available. iOS runs via Expo Go throughout; no standalone iOS binary for v1 |
+| EAS Build target | Android only — internal distribution APK via EAS |
 | Test strategy | TDD in every issue. Each agent writes failing tests first, then implements to make them pass |
 | VTO hero garment priority | `dress / overalls → tops / t-shirts / shirts → skirts / trousers` |
 
