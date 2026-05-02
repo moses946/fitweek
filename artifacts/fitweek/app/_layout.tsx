@@ -15,6 +15,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { GarmentProvider } from "@/contexts/GarmentContext";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -57,6 +58,7 @@ function RootLayoutNav() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(garment)" options={{ presentation: "modal" }} />
         <Stack.Screen name="+not-found" />
       </Stack>
       <AuthGate />
@@ -87,7 +89,9 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <AuthProvider>
-                <RootLayoutNav />
+                <GarmentProvider>
+                  <RootLayoutNav />
+                </GarmentProvider>
               </AuthProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>
