@@ -1,4 +1,5 @@
 import { AntDesign, Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -11,6 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { GradientButton } from "@/components/GradientButton";
 import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -29,7 +31,6 @@ export default function SignInScreen() {
       );
       return;
     }
-
     setIsLoading(true);
     try {
       await signIn();
@@ -42,6 +43,12 @@ export default function SignInScreen() {
       setIsLoading(false);
     }
   };
+
+  const FEATURES = [
+    { icon: "camera" as const, label: "Photograph" },
+    { icon: "sun" as const, label: "Weather" },
+    { icon: "calendar" as const, label: "Plan" },
+  ];
 
   return (
     <View
@@ -58,10 +65,10 @@ export default function SignInScreen() {
         <View
           style={[
             styles.banner,
-            { backgroundColor: colors.accent + "25", borderColor: colors.border },
+            { backgroundColor: colors.primary + "18", borderColor: colors.border },
           ]}
         >
-          <Feather name="alert-circle" size={13} color={colors.accent} />
+          <Feather name="alert-circle" size={13} color={colors.primary} />
           <Text style={[styles.bannerText, { color: colors.foreground }]}>
             Add Supabase credentials to .env to enable sign-in
           </Text>
@@ -69,47 +76,37 @@ export default function SignInScreen() {
       )}
 
       <View style={styles.content}>
+        {/* Wordmark */}
         <View style={styles.logoArea}>
-          <Text style={[styles.wordmark, { color: colors.foreground }]}>FitWeek</Text>
+          <LinearGradient
+            colors={["#7B61FF", "#4DA3FF"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.wordmarkGradient}
+          >
+            <Text style={styles.wordmark}>FitWeek</Text>
+          </LinearGradient>
           <Text style={[styles.tagline, { color: colors.mutedForeground }]}>
             Your wardrobe. Planned.
           </Text>
         </View>
 
+        {/* Feature cards */}
         <View style={styles.featureRow}>
-          <View
-            style={[
-              styles.featureCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Feather name="camera" size={22} color={colors.accent} />
-            <Text style={[styles.featureLabel, { color: colors.mutedForeground }]}>
-              Photograph
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.featureCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Feather name="sun" size={22} color={colors.accent} />
-            <Text style={[styles.featureLabel, { color: colors.mutedForeground }]}>
-              Weather
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.featureCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Feather name="calendar" size={22} color={colors.accent} />
-            <Text style={[styles.featureLabel, { color: colors.mutedForeground }]}>
-              Plan
-            </Text>
-          </View>
+          {FEATURES.map(({ icon, label }) => (
+            <View
+              key={label}
+              style={[
+                styles.featureCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <Feather name={icon} size={22} color={colors.accent} />
+              <Text style={[styles.featureLabel, { color: colors.mutedForeground }]}>
+                {label}
+              </Text>
+            </View>
+          ))}
         </View>
 
         <Text style={[styles.pitch, { color: colors.mutedForeground }]}>
@@ -125,28 +122,17 @@ export default function SignInScreen() {
         </Text>
       </View>
 
+      {/* CTA */}
       <View style={styles.bottom}>
-        <Pressable
+        <GradientButton
           testID="google-sign-in-button"
-          style={({ pressed }) => [
-            styles.googleButton,
-            { backgroundColor: colors.primary, opacity: pressed ? 0.82 : 1 },
-          ]}
           onPress={handleGoogleSignIn}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color={colors.primaryForeground} />
-          ) : (
-            <>
-              <AntDesign name="google" size={18} color={colors.primaryForeground} />
-              <Text style={[styles.googleButtonText, { color: colors.primaryForeground }]}>
-                Continue with Google
-              </Text>
-            </>
-          )}
-        </Pressable>
-
+          isLoading={isLoading}
+          label="Continue with Google"
+          leftElement={
+            !isLoading && <AntDesign name="google" size={18} color="#FFFFFF" />
+          }
+        />
         <Text style={[styles.legal, { color: colors.mutedForeground }]}>
           By continuing you agree to our Terms of Service and Privacy Policy.
         </Text>
@@ -168,11 +154,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 8,
   },
-  bannerText: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    flex: 1,
-  },
+  bannerText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
   content: {
     flex: 1,
     alignItems: "center",
@@ -180,55 +162,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     gap: 36,
   },
-  logoArea: { alignItems: "center", gap: 8 },
+  logoArea: { alignItems: "center", gap: 10 },
+  wordmarkGradient: { borderRadius: 4, paddingHorizontal: 2 },
   wordmark: {
     fontSize: 44,
     fontFamily: "Inter_700Bold",
     letterSpacing: -1.5,
+    color: "#FFFFFF",
   },
   tagline: {
     fontSize: 16,
     fontFamily: "Inter_400Regular",
     letterSpacing: 0.2,
   },
-  featureRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
+  featureRow: { flexDirection: "row", gap: 12 },
   featureCard: {
     flex: 1,
     alignItems: "center",
     paddingVertical: 18,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     gap: 8,
   },
-  featureLabel: {
-    fontSize: 11,
-    fontFamily: "Inter_500Medium",
-  },
+  featureLabel: { fontSize: 11, fontFamily: "Inter_500Medium" },
   pitch: {
     fontSize: 15,
     fontFamily: "Inter_400Regular",
     textAlign: "center",
     lineHeight: 22,
   },
-  bottom: {
-    paddingHorizontal: 24,
-    gap: 16,
-  },
-  googleButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    height: 54,
-    borderRadius: 14,
-    gap: 10,
-  },
-  googleButtonText: {
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
-  },
+  bottom: { paddingHorizontal: 24, gap: 16 },
   legal: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",

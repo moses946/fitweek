@@ -1,7 +1,9 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import React, { useState } from "react";
 import {
   Alert,
   FlatList,
@@ -14,6 +16,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { GradientButton } from "@/components/GradientButton";
+import colors from "@/constants/colors";
 import { Garment, GarmentCategory, GarmentStatus, useGarments } from "@/contexts/GarmentContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -27,31 +31,36 @@ const CATEGORIES: { key: GarmentCategory | "all"; label: string }[] = [
   { key: "accessories", label: "Accessories" },
 ];
 
+// Brand status colors (brand-system.md §Status Colors)
 const STATUS_COLOR: Record<GarmentStatus, string> = {
-  clean: "#34C759",
-  worn: "#FF9500",
-  laundry: "#FF3B30",
+  clean: "#22C55E",
+  worn: "#64748B",
+  laundry: "#F97316",
 };
 
-import React, { useState } from "react";
+const STATUS_LABEL: Record<GarmentStatus, string> = {
+  clean: "Clean",
+  worn: "Worn",
+  laundry: "In laundry",
+};
 
 function GarmentCard({ garment, onLongPress }: { garment: Garment; onLongPress: () => void }) {
-  const colors = useColors();
+  const palette = useColors();
   return (
     <Pressable
-      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+      style={[styles.card, { backgroundColor: palette.card, borderColor: palette.border }]}
       onLongPress={onLongPress}
       delayLongPress={400}
     >
       <Image source={{ uri: garment.imageUri }} style={styles.cardImage} contentFit="cover" />
-      <View style={[styles.cardOverlay, { backgroundColor: colors.card }]}>
+      <View style={styles.cardOverlay}>
         <View style={styles.cardMeta}>
           <View style={[styles.statusDot, { backgroundColor: STATUS_COLOR[garment.status] }]} />
-          <Text style={[styles.cardName, { color: colors.foreground }]} numberOfLines={1}>
+          <Text style={[styles.cardName, { color: palette.foreground }]} numberOfLines={1}>
             {garment.name}
           </Text>
         </View>
-        <Text style={[styles.cardColor, { color: colors.mutedForeground }]} numberOfLines={1}>
+        <Text style={[styles.cardColor, { color: palette.mutedForeground }]} numberOfLines={1}>
           {garment.color}
         </Text>
       </View>
@@ -60,7 +69,7 @@ function GarmentCard({ garment, onLongPress }: { garment: Garment; onLongPress: 
 }
 
 export default function ClosetScreen() {
-  const colors = useColors();
+  const palette = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { garments, isLoading, markWorn, sendToLaundry, markClean, removeGarment } = useGarments();
@@ -73,7 +82,7 @@ export default function ClosetScreen() {
 
   const handleLongPress = (garment: Garment) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const actions: Array<{ text: string; onPress: () => void; style?: "destructive" | "cancel" }> = [
+    Alert.alert(garment.name, undefined, [
       {
         text: garment.status === "clean" ? "Mark as worn" : "Mark as clean",
         onPress: () =>
@@ -90,8 +99,7 @@ export default function ClosetScreen() {
           ]),
       },
       { text: "Cancel", style: "cancel", onPress: () => {} },
-    ];
-    Alert.alert(garment.name, undefined, actions);
+    ]);
   };
 
   return (
@@ -99,20 +107,27 @@ export default function ClosetScreen() {
       style={[
         styles.container,
         {
-          backgroundColor: colors.background,
+          backgroundColor: palette.background,
           paddingTop: Platform.OS === "web" ? 67 : insets.top,
         },
       ]}
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.foreground }]}>My Closet</Text>
+        <Text style={[styles.title, { color: palette.foreground }]}>My Closet</Text>
         <Pressable
           testID="add-garment-button"
-          style={[styles.addBtn, { backgroundColor: colors.primary }]}
           onPress={() => router.push("/(garment)/add")}
+          style={styles.addBtnWrapper}
         >
-          <Feather name="plus" size={18} color={colors.primaryForeground} />
+          <LinearGradient
+            colors={colors.gradientPrimary}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.addBtn}
+          >
+            <Feather name="plus" size={18} color="#FFFFFF" />
+          </LinearGradient>
         </Pressable>
       </View>
 
@@ -127,23 +142,30 @@ export default function ClosetScreen() {
           return (
             <Pressable
               key={key}
-              style={[
-                styles.filterPill,
-                {
-                  backgroundColor: active ? colors.primary : colors.card,
-                  borderColor: active ? colors.primary : colors.border,
-                },
-              ]}
               onPress={() => setActiveCategory(key as GarmentCategory | "all")}
+              style={styles.filterPillWrapper}
             >
-              <Text
-                style={[
-                  styles.filterLabel,
-                  { color: active ? colors.primaryForeground : colors.mutedForeground },
-                ]}
-              >
-                {label}
-              </Text>
+              {active ? (
+                <LinearGradient
+                  colors={colors.gradientPrimary}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.filterPillActive}
+                >
+                  <Text style={styles.filterLabelActive}>{label}</Text>
+                </LinearGradient>
+              ) : (
+                <View
+                  style={[
+                    styles.filterPillInactive,
+                    { backgroundColor: palette.card, borderColor: palette.border },
+                  ]}
+                >
+                  <Text style={[styles.filterLabelInactive, { color: palette.mutedForeground }]}>
+                    {label}
+                  </Text>
+                </View>
+              )}
             </Pressable>
           );
         })}
@@ -152,21 +174,32 @@ export default function ClosetScreen() {
       {/* Content */}
       {garments.length === 0 && !isLoading ? (
         <View style={styles.emptyState}>
-          <View style={[styles.emptyIconWrap, { backgroundColor: colors.muted }]}>
-            <Feather name="shopping-bag" size={32} color={colors.mutedForeground} />
+          <View style={[styles.emptyIconWrap, { backgroundColor: palette.muted }]}>
+            <Feather name="shopping-bag" size={32} color={palette.mutedForeground} />
           </View>
-          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Your closet is empty</Text>
-          <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
+          <Text style={[styles.emptyTitle, { color: palette.foreground }]}>
+            Your closet is empty
+          </Text>
+          <Text style={[styles.emptyBody, { color: palette.mutedForeground }]}>
             Photograph your garments and Vision AI will classify them automatically.
           </Text>
-          <Pressable
-            style={[styles.addFirstBtn, { backgroundColor: colors.primary }]}
+          <GradientButton
             onPress={() => router.push("/(garment)/add")}
+            label="Add garment"
             testID="add-first-garment-button"
-          >
-            <Feather name="camera" size={16} color={colors.primaryForeground} />
-            <Text style={[styles.addFirstText, { color: colors.primaryForeground }]}>Add garment</Text>
-          </Pressable>
+            leftElement={<Feather name="camera" size={16} color="#FFFFFF" />}
+            style={styles.addFirstBtn}
+          />
+
+          {/* Status legend */}
+          <View style={styles.legend}>
+            {(Object.entries(STATUS_LABEL) as [GarmentStatus, string][]).map(([status, label]) => (
+              <View key={status} style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: STATUS_COLOR[status] }]} />
+                <Text style={[styles.legendText, { color: palette.mutedForeground }]}>{label}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       ) : (
         <FlatList
@@ -178,13 +211,12 @@ export default function ClosetScreen() {
             { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 80 },
           ]}
           columnWrapperStyle={styles.row}
-          scrollEnabled={!!filtered.length}
           renderItem={({ item }) => (
             <GarmentCard garment={item} onLongPress={() => handleLongPress(item)} />
           )}
           ListEmptyComponent={
             <View style={styles.filteredEmpty}>
-              <Text style={[styles.filteredEmptyText, { color: colors.mutedForeground }]}>
+              <Text style={[styles.filteredEmptyText, { color: palette.mutedForeground }]}>
                 No {activeCategory} yet
               </Text>
             </View>
@@ -206,18 +238,22 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   title: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  addBtnWrapper: {},
   addBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   filterRow: { paddingHorizontal: 16, paddingBottom: 14, gap: 8, flexDirection: "row" },
-  filterPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
-  filterLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  filterPillWrapper: {},
+  filterPillActive: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  filterLabelActive: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
+  filterPillInactive: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  filterLabelInactive: { fontSize: 13, fontFamily: "Inter_500Medium" },
   grid: { paddingHorizontal: 12, paddingTop: 4 },
   row: { gap: 10, marginBottom: 10 },
-  card: {
-    flex: 1,
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
+  card: { flex: 1, borderRadius: 16, borderWidth: 1, overflow: "hidden" },
   cardImage: { width: "100%", aspectRatio: 0.75 },
   cardOverlay: { padding: 10 },
   cardMeta: { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -242,16 +278,11 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 20, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   emptyBody: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 21 },
-  addFirstBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 13,
-    borderRadius: 14,
-    gap: 8,
-    marginTop: 4,
-  },
-  addFirstText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  addFirstBtn: { marginTop: 4 },
+  legend: { flexDirection: "row", gap: 16, marginTop: 8 },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  legendDot: { width: 7, height: 7, borderRadius: 4 },
+  legendText: { fontSize: 11, fontFamily: "Inter_400Regular" },
   filteredEmpty: { flex: 1, alignItems: "center", paddingTop: 60 },
   filteredEmptyText: { fontSize: 15, fontFamily: "Inter_400Regular" },
 });

@@ -2,7 +2,6 @@ import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Platform,
   Pressable,
@@ -12,6 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { GradientButton } from "@/components/GradientButton";
 import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -46,6 +46,12 @@ export default function ModelPhotoScreen() {
     await completeOnboarding(null);
   };
 
+  const TIPS = [
+    { icon: "maximize" as const, text: "Full body — head to toe visible" },
+    { icon: "sun" as const, text: "Good lighting, plain background" },
+    { icon: "user-check" as const, text: "Stand naturally, arms by your sides" },
+  ];
+
   return (
     <View
       style={[
@@ -67,16 +73,10 @@ export default function ModelPhotoScreen() {
       <View style={styles.photoArea}>
         {photoUri ? (
           <Pressable onPress={handlePickPhoto} style={styles.photoPreviewWrapper}>
-            <Image
-              source={{ uri: photoUri }}
-              style={styles.photoPreview}
-              contentFit="cover"
-            />
-            <View style={[styles.retakeOverlay, { backgroundColor: colors.primary + "99" }]}>
-              <Feather name="refresh-cw" size={20} color={colors.primaryForeground} />
-              <Text style={[styles.retakeText, { color: colors.primaryForeground }]}>
-                Retake
-              </Text>
+            <Image source={{ uri: photoUri }} style={styles.photoPreview} contentFit="cover" />
+            <View style={[styles.retakeOverlay, { backgroundColor: "#0F172ACC" }]}>
+              <Feather name="refresh-cw" size={20} color="#FFFFFF" />
+              <Text style={styles.retakeText}>Retake</Text>
             </View>
           </Pressable>
         ) : (
@@ -89,60 +89,34 @@ export default function ModelPhotoScreen() {
             testID="pick-photo-button"
           >
             <Feather name="user" size={48} color={colors.muted} />
-            <View
-              style={[
-                styles.addPhotoButton,
-                { backgroundColor: colors.primary },
-              ]}
+            <Pressable
+              style={[styles.addPhotoButton, { backgroundColor: colors.primary }]}
+              onPress={handlePickPhoto}
             >
-              <Feather name="camera" size={16} color={colors.primaryForeground} />
-              <Text style={[styles.addPhotoText, { color: colors.primaryForeground }]}>
-                Choose photo
-              </Text>
-            </View>
+              <Feather name="camera" size={16} color="#FFFFFF" />
+              <Text style={styles.addPhotoText}>Choose photo</Text>
+            </Pressable>
           </Pressable>
         )}
       </View>
 
       <View style={styles.tips}>
-        {[
-          { icon: "maximize", text: "Full body — head to toe visible" },
-          { icon: "sun", text: "Good lighting, plain background" },
-          { icon: "user-check", text: "Stand naturally, arms by your sides" },
-        ].map((tip) => (
+        {TIPS.map((tip) => (
           <View key={tip.text} style={styles.tipRow}>
-            <Feather name={tip.icon as any} size={14} color={colors.accent} />
+            <Feather name={tip.icon} size={14} color={colors.accent} />
             <Text style={[styles.tipText, { color: colors.mutedForeground }]}>{tip.text}</Text>
           </View>
         ))}
       </View>
 
       <View style={styles.actions}>
-        <Pressable
+        <GradientButton
           testID="continue-button"
-          style={({ pressed }) => [
-            styles.continueButton,
-            {
-              backgroundColor: photoUri ? colors.primary : colors.muted,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}
           onPress={handleContinue}
-          disabled={isSaving}
-        >
-          {isSaving ? (
-            <ActivityIndicator color={colors.primaryForeground} />
-          ) : (
-            <Text
-              style={[
-                styles.continueText,
-                { color: photoUri ? colors.primaryForeground : colors.mutedForeground },
-              ]}
-            >
-              {photoUri ? "Continue" : "Continue without photo"}
-            </Text>
-          )}
-        </Pressable>
+          isLoading={isSaving}
+          disabled={false}
+          label={photoUri ? "Continue" : "Continue without photo"}
+        />
 
         {photoUri && (
           <Pressable onPress={handleSkip} testID="skip-button">
@@ -158,21 +132,9 @@ export default function ModelPhotoScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    paddingHorizontal: 24,
-    gap: 8,
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 28,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 22,
-  },
+  header: { paddingHorizontal: 24, gap: 8, marginBottom: 24 },
+  title: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  subtitle: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22 },
   photoArea: {
     flex: 1,
     alignItems: "center",
@@ -198,10 +160,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 8,
   },
-  addPhotoText: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
+  addPhotoText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
   photoPreviewWrapper: {
     width: "100%",
     maxWidth: 260,
@@ -209,10 +168,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: "hidden",
   },
-  photoPreview: {
-    width: "100%",
-    height: "100%",
-  },
+  photoPreview: { width: "100%", height: "100%" },
   retakeOverlay: {
     position: "absolute",
     bottom: 0,
@@ -224,42 +180,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 8,
   },
-  retakeText: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
-  tips: {
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    gap: 10,
-  },
-  tipRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  tipText: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-  },
-  actions: {
-    paddingHorizontal: 24,
-    gap: 14,
-    alignItems: "center",
-  },
-  continueButton: {
-    width: "100%",
-    height: 54,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  continueText: {
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
-  },
-  skipText: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-  },
+  retakeText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
+  tips: { paddingHorizontal: 24, paddingVertical: 20, gap: 10 },
+  tipRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  tipText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  actions: { paddingHorizontal: 24, gap: 14, alignItems: "center" },
+  skipText: { fontSize: 14, fontFamily: "Inter_400Regular" },
 });

@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   FlatList,
   Platform,
@@ -10,34 +11,61 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Garment, useGarments } from "@/contexts/GarmentContext";
+import colors from "@/constants/colors";
+import { Garment, GarmentStatus, useGarments } from "@/contexts/GarmentContext";
 import { useColors } from "@/hooks/useColors";
 
-const STATUS_COLOR = { clean: "#34C759", worn: "#FF9500", laundry: "#FF3B30" };
-const STATUS_LABEL = { clean: "Clean", worn: "Worn", laundry: "In laundry" };
+// Brand status colors
+const STATUS_COLOR: Record<GarmentStatus, string> = {
+  clean: "#22C55E",
+  worn: "#64748B",
+  laundry: "#F97316",
+};
+
+const STATUS_LABEL: Record<GarmentStatus, string> = {
+  clean: "Clean",
+  worn: "Worn",
+  laundry: "In laundry",
+};
 
 function LaundryCard({ garment, onMarkClean }: { garment: Garment; onMarkClean: () => void }) {
-  const colors = useColors();
+  const palette = useColors();
   return (
-    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.border }]}>
       <Image source={{ uri: garment.imageUri }} style={styles.cardImage} contentFit="cover" />
       <View style={styles.cardBody}>
-        <Text style={[styles.cardName, { color: colors.foreground }]} numberOfLines={1}>
+        <Text style={[styles.cardName, { color: palette.foreground }]} numberOfLines={1}>
           {garment.name}
         </Text>
         <View style={styles.statusRow}>
           <View style={[styles.statusDot, { backgroundColor: STATUS_COLOR[garment.status] }]} />
-          <Text style={[styles.statusText, { color: colors.mutedForeground }]}>
+          <Text style={[styles.statusText, { color: palette.mutedForeground }]}>
             {STATUS_LABEL[garment.status]}
           </Text>
         </View>
       </View>
+
       {garment.status === "laundry" && (
-        <Pressable
-          style={[styles.cleanBtn, { borderColor: STATUS_COLOR.clean }]}
-          onPress={onMarkClean}
-        >
-          <Text style={[styles.cleanBtnText, { color: STATUS_COLOR.clean }]}>Mark clean</Text>
+        <Pressable onPress={onMarkClean}>
+          <LinearGradient
+            colors={colors.gradientPrimary}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.cleanBtn}
+          >
+            <Feather name="check" size={13} color="#FFFFFF" />
+            <Text style={styles.cleanBtnText}>Clean</Text>
+          </LinearGradient>
+        </Pressable>
+      )}
+
+      {garment.status === "worn" && (
+        <Pressable onPress={onMarkClean}>
+          <View style={[styles.wornBtn, { borderColor: palette.border }]}>
+            <Text style={[styles.wornBtnText, { color: palette.mutedForeground }]}>
+              Mark clean
+            </Text>
+          </View>
         </Pressable>
       )}
     </View>
@@ -45,7 +73,7 @@ function LaundryCard({ garment, onMarkClean }: { garment: Garment; onMarkClean: 
 }
 
 export default function LaundryScreen() {
-  const colors = useColors();
+  const palette = useColors();
   const insets = useSafeAreaInsets();
   const { garments, markClean } = useGarments();
 
@@ -57,15 +85,15 @@ export default function LaundryScreen() {
       style={[
         styles.container,
         {
-          backgroundColor: colors.background,
+          backgroundColor: palette.background,
           paddingTop: Platform.OS === "web" ? 67 : insets.top,
         },
       ]}
     >
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.foreground }]}>Laundry</Text>
-        <View style={[styles.badge, { backgroundColor: colors.muted }]}>
-          <Text style={[styles.badgeText, { color: colors.mutedForeground }]}>
+        <Text style={[styles.title, { color: palette.foreground }]}>Laundry</Text>
+        <View style={[styles.badge, { backgroundColor: palette.muted }]}>
+          <Text style={[styles.badgeText, { color: palette.mutedForeground }]}>
             {count} {count === 1 ? "item" : "items"}
           </Text>
         </View>
@@ -73,9 +101,11 @@ export default function LaundryScreen() {
 
       {count === 0 ? (
         <View style={styles.emptyState}>
-          <Feather name="check-circle" size={40} color={colors.mutedForeground} />
-          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>All clean</Text>
-          <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
+          <View style={[styles.emptyIconWrap, { backgroundColor: palette.muted }]}>
+            <Feather name="check-circle" size={32} color={palette.mutedForeground} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: palette.foreground }]}>All clean</Text>
+          <Text style={[styles.emptyBody, { color: palette.mutedForeground }]}>
             Items you mark as worn or sent to laundry will appear here.
           </Text>
         </View>
@@ -114,8 +144,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 40,
-    gap: 12,
+    gap: 16,
     paddingBottom: 80,
+  },
+  emptyIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   emptyBody: {
@@ -128,7 +165,7 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     overflow: "hidden",
     gap: 12,
@@ -141,10 +178,19 @@ const styles = StyleSheet.create({
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   statusText: { fontSize: 12, fontFamily: "Inter_400Regular" },
   cleanBtn: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 4,
+  },
+  cleanBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
+  wornBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
     borderWidth: 1,
   },
-  cleanBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  wornBtnText: { fontSize: 12, fontFamily: "Inter_500Medium" },
 });

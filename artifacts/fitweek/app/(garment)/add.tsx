@@ -1,6 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -16,19 +17,15 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { GradientButton } from "@/components/GradientButton";
+import brandColors from "@/constants/colors";
 import { GarmentCategory, useGarments } from "@/contexts/GarmentContext";
 import { useColors } from "@/hooks/useColors";
 
 // --- Config ---
 
 const CATEGORIES: GarmentCategory[] = [
-  "tops",
-  "bottoms",
-  "dresses",
-  "outerwear",
-  "shoes",
-  "accessories",
-  "other",
+  "tops", "bottoms", "dresses", "outerwear", "shoes", "accessories", "other",
 ];
 
 const CATEGORY_LABELS: Record<GarmentCategory, string> = {
@@ -42,30 +39,30 @@ const CATEGORY_LABELS: Record<GarmentCategory, string> = {
 };
 
 const COLOR_HEX: Record<string, string> = {
-  White: "#F5F5F0",
-  Black: "#1A1A1A",
-  Gray: "#808080",
-  "Light Gray": "#C8C8C8",
-  Charcoal: "#36454F",
+  White: "#F8FAFC",
+  Black: "#0F172A",
+  Gray: "#64748B",
+  "Light Gray": "#CBD5E1",
+  Charcoal: "#334155",
   Red: "#C0392B",
   Burgundy: "#7B1830",
-  Orange: "#E67E22",
-  Yellow: "#F1C40F",
+  Orange: "#EA580C",
+  Yellow: "#EAB308",
   Khaki: "#C3B091",
-  Olive: "#6B6B00",
-  Green: "#27AE60",
-  "Forest Green": "#1A6B3A",
-  Teal: "#16A085",
-  Cyan: "#00BCD4",
-  Navy: "#0D1B4B",
-  Blue: "#2980B9",
-  "Light Blue": "#85C1E9",
-  Purple: "#7D3C98",
-  Pink: "#F48FB1",
-  Magenta: "#AB47BC",
-  Brown: "#795548",
-  Beige: "#D7CCC8",
-  Unknown: "#BDBDBD",
+  Olive: "#4D7C0F",
+  Green: "#16A34A",
+  "Forest Green": "#14532D",
+  Teal: "#0D9488",
+  Cyan: "#06B6D4",
+  Navy: "#1E3A5F",
+  Blue: "#2563EB",
+  "Light Blue": "#7DD3FC",
+  Purple: "#7C3AED",
+  Pink: "#EC4899",
+  Magenta: "#A21CAF",
+  Brown: "#78350F",
+  Beige: "#D6D3D1",
+  Unknown: "#CBD5E1",
 };
 
 type Step = "pick" | "analyzing" | "review";
@@ -83,6 +80,9 @@ export default function AddGarmentScreen() {
   const [tags, setTags] = useState<string[]>([]);
   const [name, setName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  const pt = Platform.OS === "web" ? 67 : insets.top + 12;
+  const pb = Platform.OS === "web" ? 34 : insets.bottom + 16;
 
   const handlePickPhoto = async (useCamera: boolean) => {
     try {
@@ -116,7 +116,6 @@ export default function AddGarmentScreen() {
       setImageUri(asset.uri);
       setStep("analyzing");
 
-      // Call Vision API
       const classified = await classifyImage({
         imageBase64: asset.base64 ?? undefined,
       });
@@ -126,7 +125,6 @@ export default function AddGarmentScreen() {
         setColor(classified.color);
         setTags(classified.tags);
       }
-
       setStep("review");
     } catch {
       Alert.alert("Error", "Could not open the photo picker. Please try again.");
@@ -156,17 +154,18 @@ export default function AddGarmentScreen() {
 
   const removeTag = (tag: string) => setTags((prev) => prev.filter((t) => t !== tag));
 
-  const pb = Platform.OS === "web" ? 34 : insets.bottom + 16;
-  const pt = Platform.OS === "web" ? 67 : insets.top + 12;
-
   // --- Step: Pick ---
   if (step === "pick") {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: pt, paddingBottom: pb }]}>
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: colors.background, paddingTop: pt, paddingBottom: pb },
+        ]}
+      >
         <View style={styles.sheetHandle}>
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
         </View>
-
         <Pressable style={styles.closeBtn} onPress={() => router.back()}>
           <Feather name="x" size={22} color={colors.mutedForeground} />
         </Pressable>
@@ -184,11 +183,18 @@ export default function AddGarmentScreen() {
             ]}
             onPress={() => handlePickPhoto(true)}
           >
-            <View style={[styles.pickIconWrap, { backgroundColor: colors.primary }]}>
-              <Feather name="camera" size={24} color={colors.primaryForeground} />
-            </View>
+            <LinearGradient
+              colors={brandColors.gradientPrimary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.pickIconWrap}
+            >
+              <Feather name="camera" size={24} color="#FFFFFF" />
+            </LinearGradient>
             <Text style={[styles.pickOptionLabel, { color: colors.foreground }]}>Camera</Text>
-            <Text style={[styles.pickOptionSub, { color: colors.mutedForeground }]}>Take a new photo</Text>
+            <Text style={[styles.pickOptionSub, { color: colors.mutedForeground }]}>
+              Take a new photo
+            </Text>
           </Pressable>
 
           <Pressable
@@ -198,11 +204,18 @@ export default function AddGarmentScreen() {
             ]}
             onPress={() => handlePickPhoto(false)}
           >
-            <View style={[styles.pickIconWrap, { backgroundColor: colors.accent }]}>
-              <Feather name="image" size={24} color={colors.primaryForeground} />
-            </View>
+            <LinearGradient
+              colors={["#4DA3FF", "#7B61FF"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.pickIconWrap}
+            >
+              <Feather name="image" size={24} color="#FFFFFF" />
+            </LinearGradient>
             <Text style={[styles.pickOptionLabel, { color: colors.foreground }]}>Library</Text>
-            <Text style={[styles.pickOptionSub, { color: colors.mutedForeground }]}>Choose existing photo</Text>
+            <Text style={[styles.pickOptionSub, { color: colors.mutedForeground }]}>
+              Choose existing photo
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -216,9 +229,11 @@ export default function AddGarmentScreen() {
         {imageUri && (
           <Image source={{ uri: imageUri }} style={styles.analyzingPreview} contentFit="cover" />
         )}
-        <View style={[styles.analyzingOverlay, { backgroundColor: colors.background + "E8" }]}>
+        <View style={[styles.analyzingOverlay, { backgroundColor: colors.card + "F0" }]}>
           <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={[styles.analyzingText, { color: colors.foreground }]}>Analyzing garment…</Text>
+          <Text style={[styles.analyzingText, { color: colors.foreground }]}>
+            Analyzing garment…
+          </Text>
           <Text style={[styles.analyzingSubtext, { color: colors.mutedForeground }]}>
             Google Vision is classifying your item
           </Text>
@@ -230,7 +245,12 @@ export default function AddGarmentScreen() {
   // --- Step: Review ---
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.reviewHeader, { paddingTop: pt, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.reviewHeader,
+          { paddingTop: pt, borderBottomColor: colors.border },
+        ]}
+      >
         <Pressable onPress={() => setStep("pick")}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </Pressable>
@@ -241,16 +261,23 @@ export default function AddGarmentScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[styles.reviewContent, { paddingBottom: pb + 80 }]}>
-        {/* Photo preview */}
         {imageUri && (
           <Image source={{ uri: imageUri }} style={styles.reviewImage} contentFit="cover" />
         )}
 
-        {/* Color detected */}
+        {/* Color */}
         <View style={styles.section}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>COLOR</Text>
           <View style={styles.colorRow}>
-            <View style={[styles.colorDot, { backgroundColor: COLOR_HEX[color] ?? "#CCC", borderColor: colors.border }]} />
+            <View
+              style={[
+                styles.colorDot,
+                {
+                  backgroundColor: COLOR_HEX[color] ?? "#CBD5E1",
+                  borderColor: colors.border,
+                },
+              ]}
+            />
             <Text style={[styles.colorName, { color: colors.foreground }]}>{color}</Text>
           </View>
         </View>
@@ -260,25 +287,28 @@ export default function AddGarmentScreen() {
           <Text style={[styles.label, { color: colors.mutedForeground }]}>CATEGORY</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillRow}>
             {CATEGORIES.map((cat) => (
-              <Pressable
-                key={cat}
-                style={[
-                  styles.pill,
-                  {
-                    backgroundColor: category === cat ? colors.primary : colors.card,
-                    borderColor: category === cat ? colors.primary : colors.border,
-                  },
-                ]}
-                onPress={() => setCategory(cat)}
-              >
-                <Text
-                  style={[
-                    styles.pillText,
-                    { color: category === cat ? colors.primaryForeground : colors.mutedForeground },
-                  ]}
-                >
-                  {CATEGORY_LABELS[cat]}
-                </Text>
+              <Pressable key={cat} onPress={() => setCategory(cat)} style={styles.pillWrapper}>
+                {category === cat ? (
+                  <LinearGradient
+                    colors={brandColors.gradientPrimary}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.pillActive}
+                  >
+                    <Text style={styles.pillTextActive}>{CATEGORY_LABELS[cat]}</Text>
+                  </LinearGradient>
+                ) : (
+                  <View
+                    style={[
+                      styles.pillInactive,
+                      { backgroundColor: colors.card, borderColor: colors.border },
+                    ]}
+                  >
+                    <Text style={[styles.pillTextInactive, { color: colors.mutedForeground }]}>
+                      {CATEGORY_LABELS[cat]}
+                    </Text>
+                  </View>
+                )}
               </Pressable>
             ))}
           </ScrollView>
@@ -292,7 +322,10 @@ export default function AddGarmentScreen() {
               {tags.map((tag) => (
                 <Pressable
                   key={tag}
-                  style={[styles.tagChip, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+                  style={[
+                    styles.tagChip,
+                    { backgroundColor: colors.secondary, borderColor: colors.border },
+                  ]}
                   onPress={() => removeTag(tag)}
                 >
                   <Text style={[styles.tagText, { color: colors.foreground }]}>{tag}</Text>
@@ -303,7 +336,7 @@ export default function AddGarmentScreen() {
           </View>
         )}
 
-        {/* Optional name */}
+        {/* Name */}
         <View style={styles.section}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>NAME (OPTIONAL)</Text>
           <TextInput
@@ -313,33 +346,28 @@ export default function AddGarmentScreen() {
             placeholderTextColor={colors.mutedForeground}
             style={[
               styles.nameInput,
-              { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground },
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                color: colors.foreground,
+              },
             ]}
           />
         </View>
       </ScrollView>
 
-      {/* Save button */}
+      {/* Save bar */}
       <View
         style={[
           styles.saveBar,
           { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: pb },
         ]}
       >
-        <Pressable
-          style={({ pressed }) => [
-            styles.saveButton,
-            { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
-          ]}
+        <GradientButton
           onPress={handleSave}
-          disabled={isSaving}
-        >
-          {isSaving ? (
-            <ActivityIndicator color={colors.primaryForeground} />
-          ) : (
-            <Text style={[styles.saveText, { color: colors.primaryForeground }]}>Save to closet</Text>
-          )}
-        </Pressable>
+          isLoading={isSaving}
+          label="Save to closet"
+        />
       </View>
     </View>
   );
@@ -373,11 +401,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 32,
   },
-  pickOptions: {
-    flexDirection: "row",
-    paddingHorizontal: 20,
-    gap: 14,
-  },
+  pickOptions: { flexDirection: "row", paddingHorizontal: 20, gap: 14 },
   pickOption: {
     flex: 1,
     borderRadius: 16,
@@ -395,13 +419,7 @@ const styles = StyleSheet.create({
   },
   pickOptionLabel: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   pickOptionSub: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center" },
-  analyzingPreview: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
+  analyzingPreview: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   analyzingOverlay: {
     alignItems: "center",
     justifyContent: "center",
@@ -422,25 +440,18 @@ const styles = StyleSheet.create({
   },
   reviewTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
   reviewContent: { paddingHorizontal: 20, paddingTop: 20, gap: 24 },
-  reviewImage: {
-    width: "100%",
-    aspectRatio: 0.75,
-    borderRadius: 16,
-  },
+  reviewImage: { width: "100%", aspectRatio: 0.75, borderRadius: 16 },
   section: { gap: 10 },
   label: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.8 },
   colorRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   colorDot: { width: 28, height: 28, borderRadius: 14, borderWidth: 1 },
   colorName: { fontSize: 15, fontFamily: "Inter_500Medium" },
   pillRow: { flexDirection: "row" },
-  pill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginRight: 8,
-  },
-  pillText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  pillWrapper: { marginRight: 8 },
+  pillActive: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  pillTextActive: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
+  pillInactive: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  pillTextInactive: { fontSize: 13, fontFamily: "Inter_500Medium" },
   tagsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tagChip: {
     flexDirection: "row",
@@ -468,11 +479,4 @@ const styles = StyleSheet.create({
     padding: 20,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  saveButton: {
-    height: 54,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  saveText: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
 });

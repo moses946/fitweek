@@ -1,53 +1,61 @@
 /**
- * FitWeek design tokens.
- * Fashion-forward palette: warm cream surfaces, charcoal text, sandy accent.
+ * FitWeek design tokens — aligned to brand-system.md
+ *
+ * Palette:  90% neutral slate + 10% #7B61FF→#4DA3FF gradient
+ * Status:   Clean #22C55E | Laundry #F97316 | Worn #64748B
+ * Radius:   16px cards, 12–14px buttons
  */
 
 const colors = {
   light: {
-    // Legacy aliases
-    text: "#1A1A1A",
-    tint: "#C4A882",
+    // Text
+    text: "#0F172A",
+    foreground: "#0F172A",
 
-    // Core surfaces
-    background: "#F7F5F2",
-    foreground: "#1A1A1A",
-
-    // Cards / elevated surfaces
+    // Surfaces
+    background: "#F1F5F9",
     card: "#FFFFFF",
-    cardForeground: "#1A1A1A",
+    cardForeground: "#0F172A",
 
-    // Primary action (buttons, active states)
-    primary: "#1A1A1A",
+    // Primary — solid fallback (use gradientPrimary for CTAs)
+    primary: "#7B61FF",
+    primaryEnd: "#4DA3FF",
     primaryForeground: "#FFFFFF",
 
-    // Secondary / less-emphasis
-    secondary: "#F0EDE8",
-    secondaryForeground: "#1A1A1A",
+    // Secondary
+    secondary: "#F1F5F9",
+    secondaryForeground: "#0F172A",
 
-    // Muted (dividers, timestamps, placeholders)
-    muted: "#EAE6E1",
-    mutedForeground: "#8A8480",
+    // Muted
+    muted: "#E2E8F0",
+    mutedForeground: "#64748B",
 
-    // Accent — warm sandy taupe
-    accent: "#C4A882",
-    accentForeground: "#1A1A1A",
+    // Accent — matches gradient start
+    accent: "#7B61FF",
+    accentForeground: "#FFFFFF",
+
+    // Borders & inputs
+    border: "#E2E8F0",
+    input: "#E2E8F0",
+
+    // Garment status (brand-system.md §Status Colors)
+    statusClean: "#22C55E",
+    statusWorn: "#64748B",
+    statusLaundry: "#F97316",
 
     // Destructive
-    destructive: "#FF3B30",
+    destructive: "#EF4444",
     destructiveForeground: "#FFFFFF",
 
-    // Borders and inputs
-    border: "#E5E0DA",
-    input: "#E5E0DA",
-
-    // Garment status
-    statusClean: "#34C759",
-    statusWorn: "#FF9500",
-    statusLaundry: "#FF3B30",
+    // Legacy alias
+    tint: "#7B61FF",
   },
 
-  radius: 12,
+  /** Primary gradient — use with LinearGradient */
+  gradientPrimary: ["#7B61FF", "#4DA3FF"] as [string, string],
+
+  /** 8pt-grid radius */
+  radius: 16,
 };
 
 export default colors;
