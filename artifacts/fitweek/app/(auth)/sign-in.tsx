@@ -78,13 +78,11 @@ export default function SignInScreen() {
       <View style={styles.content}>
         {/* Logo */}
         <View style={styles.logoArea}>
-          <View style={styles.logoBadge}>
-            <Image
-              source={require("@/assets/images/Logo2.png")}
-              style={styles.logoImage}
-              contentFit="contain"
-            />
-          </View>
+          <Image
+            source={require("@/assets/images/Logo2.png")}
+            style={styles.logoImage}
+            contentFit="contain"
+          />
           <Text style={[styles.tagline, { color: colors.mutedForeground }]}>
             Your wardrobe. Planned.
           </Text>
@@ -162,15 +160,9 @@ const styles = StyleSheet.create({
     gap: 36,
   },
   logoArea: { alignItems: "center", gap: 14 },
-  logoBadge: {
-    backgroundColor: "#0F172A",
-    borderRadius: 20,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-  },
   logoImage: {
-    width: 220,
-    height: 72,
+    width: 240,
+    height: 80,
   },
   tagline: {
     fontSize: 16,
