@@ -2,9 +2,10 @@
  * Issue 1 — TDD: AuthContext unit tests
  *
  * Tests use mocked Supabase client and AsyncStorage.
- * Run with: pnpm test (requires jest-expo setup in package.json)
+ * Run with: pnpm --filter @workspace/fitweek test
  *
- * Red → Green → Refactor: write these tests before changing AuthContext.
+ * Pattern: jest.fn() declared inside jest.mock factory (avoids hoisting issues),
+ * then retrieved via jest.requireMock() for per-test mock setup.
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -17,23 +18,27 @@ jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
 );
 
-const mockGetSession = jest.fn();
-const mockOnAuthStateChange = jest.fn();
-const mockSignInWithOAuth = jest.fn();
-const mockSignOut = jest.fn();
-const mockFrom = jest.fn();
-
 jest.mock("../lib/supabase", () => ({
   isSupabaseConfigured: true,
   supabase: {
     auth: {
-      getSession: mockGetSession,
-      onAuthStateChange: mockOnAuthStateChange,
-      signInWithOAuth: mockSignInWithOAuth,
-      signOut: mockSignOut,
+      getSession: jest.fn(),
+      onAuthStateChange: jest.fn(() => ({
+        data: { subscription: { unsubscribe: jest.fn() } },
+      })),
+      signInWithOAuth: jest.fn(),
+      signOut: jest.fn(),
       setSession: jest.fn(),
     },
-    from: mockFrom,
+    from: jest.fn(() => ({
+      upsert: jest.fn(() => ({ data: null, error: null })),
+    })),
+    storage: {
+      from: jest.fn(() => ({
+        upload: jest.fn(() => ({ data: null, error: null })),
+        getPublicUrl: jest.fn(() => ({ data: { publicUrl: null } })),
+      })),
+    },
   },
 }));
 
@@ -47,14 +52,17 @@ jest.mock("expo-linking", () => ({
 }));
 
 jest.mock("expo-image-picker", () => ({
-  requestCameraPermissionsAsync: jest.fn(() => ({ status: "granted" })),
-  requestMediaLibraryPermissionsAsync: jest.fn(() => ({ status: "granted" })),
-  launchImageLibraryAsync: jest.fn(),
+  requestCameraPermissionsAsync: jest.fn(() => Promise.resolve({ status: "granted" })),
+  requestMediaLibraryPermissionsAsync: jest.fn(() => Promise.resolve({ status: "granted" })),
+  launchImageLibraryAsync: jest.fn(() => Promise.resolve({ canceled: true, assets: [] })),
 }));
 
 // --- Helpers ---
 
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
+
+// Access the auto-injected jest.fn() instances for per-test setup
+const supabaseMock = (jest.requireMock("../lib/supabase") as { supabase: { auth: { getSession: jest.Mock; onAuthStateChange: jest.Mock; signOut: jest.Mock }; from: jest.Mock } }).supabase;
 
 const mockSession = {
   user: {
@@ -66,22 +74,25 @@ const mockSession = {
   refresh_token: "refresh-token",
 };
 
-const noSubscription = {
-  data: {
-    subscription: { unsubscribe: jest.fn() },
-  },
-};
+function noSubscription() {
+  return { data: { subscription: { unsubscribe: jest.fn() } } };
+}
 
 function wrapper({ children }: { children: React.ReactNode }) {
   return <AuthProvider>{children}</AuthProvider>;
 }
 
+beforeEach(() => {
+  jest.clearAllMocks();
+  // Default: onAuthStateChange returns a valid subscription object
+  supabaseMock.auth.onAuthStateChange.mockReturnValue(noSubscription());
+});
+
 // --- Tests ---
 
 describe("AuthContext — Test 1: valid session in storage", () => {
   it("returns the session and user when Supabase has an active session", async () => {
-    mockGetSession.mockResolvedValueOnce({ data: { session: mockSession } });
-    mockOnAuthStateChange.mockReturnValueOnce(noSubscription);
+    supabaseMock.auth.getSession.mockResolvedValueOnce({ data: { session: mockSession } });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -96,8 +107,7 @@ describe("AuthContext — Test 1: valid session in storage", () => {
 
 describe("AuthContext — Test 2: no session in storage", () => {
   it("returns null session and user when no session exists", async () => {
-    mockGetSession.mockResolvedValueOnce({ data: { session: null } });
-    mockOnAuthStateChange.mockReturnValueOnce(noSubscription);
+    supabaseMock.auth.getSession.mockResolvedValueOnce({ data: { session: null } });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -112,8 +122,7 @@ describe("AuthContext — Test 2: no session in storage", () => {
 
 describe("AuthContext — Test 3: onboarding not complete by default", () => {
   it("returns hasCompletedOnboarding = false when AsyncStorage is empty", async () => {
-    mockGetSession.mockResolvedValueOnce({ data: { session: null } });
-    mockOnAuthStateChange.mockReturnValueOnce(noSubscription);
+    supabaseMock.auth.getSession.mockResolvedValueOnce({ data: { session: null } });
     await AsyncStorage.clear();
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -128,8 +137,7 @@ describe("AuthContext — Test 3: onboarding not complete by default", () => {
 
 describe("AuthContext — Test 4: completeOnboarding sets flag", () => {
   it("sets hasCompletedOnboarding to true after completeOnboarding is called", async () => {
-    mockGetSession.mockResolvedValueOnce({ data: { session: null } });
-    mockOnAuthStateChange.mockReturnValueOnce(noSubscription);
+    supabaseMock.auth.getSession.mockResolvedValueOnce({ data: { session: null } });
     await AsyncStorage.clear();
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -145,12 +153,8 @@ describe("AuthContext — Test 4: completeOnboarding sets flag", () => {
 
 describe("AuthContext — Test 5: signOut clears session and onboarding", () => {
   it("clears session and hasCompletedOnboarding after signOut", async () => {
-    mockGetSession.mockResolvedValueOnce({ data: { session: mockSession } });
-    mockOnAuthStateChange.mockImplementationOnce((callback) => {
-      // Simulate auth state change to null on signOut
-      return noSubscription;
-    });
-    mockSignOut.mockResolvedValueOnce({});
+    supabaseMock.auth.getSession.mockResolvedValueOnce({ data: { session: mockSession } });
+    supabaseMock.auth.signOut.mockResolvedValueOnce({});
     await AsyncStorage.setItem("@fitweek/onboarding_complete", "true");
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -168,8 +172,7 @@ describe("AuthContext — Test 5: signOut clears session and onboarding", () => 
 
 describe("AuthContext — Test 6: Supabase error on getSession is handled gracefully", () => {
   it("falls back to null session without throwing when Supabase is unreachable", async () => {
-    mockGetSession.mockRejectedValueOnce(new Error("Network error"));
-    mockOnAuthStateChange.mockReturnValueOnce(noSubscription);
+    supabaseMock.auth.getSession.mockRejectedValueOnce(new Error("Network error"));
 
     const { result } = renderHook(() => useAuth(), { wrapper });
 

@@ -1,31 +1,22 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 
+import {
+  markWorn as _markWorn,
+  sendToLaundry as _sendToLaundry,
+  markWashed as _markWashed,
+  skipForSession as _skipForSession,
+  skipForWeek as _skipForWeek,
+  softDelete as _softDelete,
+  restore as _restore,
+  purge as _purge,
+} from "@/lib/garmentStatus";
+import { Garment, GarmentCategory, GarmentStatus } from "@/lib/types";
+
+// Re-export types so existing imports from this file still work
+export type { Garment, GarmentCategory, GarmentStatus };
+
 const STORAGE_KEY = "@fitweek/garments";
-
-export type GarmentCategory =
-  | "tops"
-  | "bottoms"
-  | "dresses"
-  | "outerwear"
-  | "shoes"
-  | "accessories"
-  | "other";
-
-export type GarmentStatus = "clean" | "worn" | "laundry";
-
-export interface Garment {
-  id: string;
-  imageUri: string;
-  category: GarmentCategory;
-  color: string;
-  tags: string[];
-  name: string;
-  status: GarmentStatus;
-  wearCount: number;
-  lastWornAt: string | null;
-  createdAt: string;
-}
 
 export interface ClassifyResponse {
   category: GarmentCategory;
@@ -37,12 +28,23 @@ export interface ClassifyResponse {
 interface GarmentContextValue {
   garments: Garment[];
   isLoading: boolean;
-  addGarment: (g: Omit<Garment, "id" | "createdAt" | "wearCount" | "lastWornAt">) => Promise<Garment>;
+  addGarment: (
+    g: Omit<Garment, "id" | "createdAt" | "wearCount" | "lastWornAt" | "lastSkippedAt" | "skipUntil" | "deletedAt">,
+  ) => Promise<Garment>;
   updateGarment: (id: string, patch: Partial<Garment>) => Promise<void>;
   removeGarment: (id: string) => Promise<void>;
+  // Status transitions
   markWorn: (id: string) => Promise<void>;
   sendToLaundry: (id: string) => Promise<void>;
   markClean: (id: string) => Promise<void>;
+  // Skip
+  skipForSession: (id: string) => Promise<void>;
+  skipForWeek: (id: string) => Promise<void>;
+  // Soft delete
+  softDeleteGarment: (id: string) => Promise<void>;
+  restoreGarment: (id: string) => Promise<void>;
+  purgeGarment: (id: string) => Promise<void>;
+  // AI classification
   classifyImage: (params: { imageBase64?: string; imageUrl?: string }) => Promise<ClassifyResponse | null>;
 }
 
@@ -71,12 +73,17 @@ export function GarmentProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addGarment = useCallback(
-    async (data: Omit<Garment, "id" | "createdAt" | "wearCount" | "lastWornAt">) => {
+    async (
+      data: Omit<Garment, "id" | "createdAt" | "wearCount" | "lastWornAt" | "lastSkippedAt" | "skipUntil" | "deletedAt">,
+    ) => {
       const garment: Garment = {
         ...data,
         id: makeId(),
         wearCount: 0,
         lastWornAt: null,
+        lastSkippedAt: null,
+        skipUntil: null,
+        deletedAt: null,
         createdAt: new Date().toISOString(),
       };
       await persist([garment, ...garments]);
@@ -92,57 +99,58 @@ export function GarmentProvider({ children }: { children: React.ReactNode }) {
     [garments, persist],
   );
 
+  // Hard remove (no undo) — kept for programmatic use
   const removeGarment = useCallback(
     async (id: string) => {
-      await persist(garments.filter((g) => g.id !== id));
+      await persist(_purge(garments, id));
     },
     [garments, persist],
   );
 
-  const markWorn = useCallback(
-    async (id: string) => {
-      await persist(
-        garments.map((g) =>
-          g.id === id
-            ? {
-                ...g,
-                status: "worn" as GarmentStatus,
-                wearCount: g.wearCount + 1,
-                lastWornAt: new Date().toISOString(),
-              }
-            : g,
-        ),
-      );
-    },
-    [garments, persist],
-  );
+  // ── Status transitions ──────────────────────────────────────────────────────
 
-  const sendToLaundry = useCallback(
-    async (id: string) => {
-      await persist(
-        garments.map((g) => (g.id === id ? { ...g, status: "laundry" as GarmentStatus } : g)),
-      );
-    },
-    [garments, persist],
-  );
+  const markWorn = useCallback(async (id: string) => {
+    await persist(_markWorn(garments, id));
+  }, [garments, persist]);
 
-  const markClean = useCallback(
-    async (id: string) => {
-      await persist(
-        garments.map((g) => (g.id === id ? { ...g, status: "clean" as GarmentStatus } : g)),
-      );
-    },
-    [garments, persist],
-  );
+  const sendToLaundry = useCallback(async (id: string) => {
+    await persist(_sendToLaundry(garments, id));
+  }, [garments, persist]);
+
+  const markClean = useCallback(async (id: string) => {
+    await persist(_markWashed(garments, id));
+  }, [garments, persist]);
+
+  // ── Skip logic ──────────────────────────────────────────────────────────────
+
+  const skipForSession = useCallback(async (id: string) => {
+    await persist(_skipForSession(garments, id));
+  }, [garments, persist]);
+
+  const skipForWeek = useCallback(async (id: string) => {
+    await persist(_skipForWeek(garments, id));
+  }, [garments, persist]);
+
+  // ── Soft delete ─────────────────────────────────────────────────────────────
+
+  const softDeleteGarment = useCallback(async (id: string) => {
+    await persist(_softDelete(garments, id));
+  }, [garments, persist]);
+
+  const restoreGarment = useCallback(async (id: string) => {
+    await persist(_restore(garments, id));
+  }, [garments, persist]);
+
+  const purgeGarment = useCallback(async (id: string) => {
+    await persist(_purge(garments, id));
+  }, [garments, persist]);
+
+  // ── AI classification ───────────────────────────────────────────────────────
 
   const classifyImage = useCallback(
-    async (params: {
-      imageBase64?: string;
-      imageUrl?: string;
-    }): Promise<ClassifyResponse | null> => {
+    async (params: { imageBase64?: string; imageUrl?: string }): Promise<ClassifyResponse | null> => {
       const domain = process.env.EXPO_PUBLIC_DOMAIN;
       if (!domain) return null;
-
       try {
         const res = await fetch(`https://${domain}/api/garments/classify`, {
           method: "POST",
@@ -169,6 +177,11 @@ export function GarmentProvider({ children }: { children: React.ReactNode }) {
         markWorn,
         sendToLaundry,
         markClean,
+        skipForSession,
+        skipForWeek,
+        softDeleteGarment,
+        restoreGarment,
+        purgeGarment,
         classifyImage,
       }}
     >
