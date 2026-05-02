@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/fitweek/"
+title = "FitWeek"
+version = "1.0.0"
+id = "artifacts/fitweek"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/fitweek/" ]
+localPort = 24937
+
+[services.development]
+run = "pnpm --filter @workspace/fitweek run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/fitweek", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/fitweek", "run", "serve" ]
+
+[services.env]
+PORT = "24937"
+BASE_PATH = "/fitweek/"

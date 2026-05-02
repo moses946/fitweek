@@ -1,8 +1,8 @@
-# Workspace
+# FitWeek Workspace
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+pnpm workspace monorepo using TypeScript. Contains a React Native (Expo) mobile app and an Express API server.
 
 ## Stack
 
@@ -10,18 +10,61 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Node.js version**: 24
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
-- **API framework**: Express 5
+- **API framework**: Express 5 (artifacts/api-server)
 - **Database**: PostgreSQL + Drizzle ORM
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
+- **Mobile**: Expo SDK 54 + Expo Router v6 + React Native 0.81
+
+## Artifacts
+
+### `artifacts/fitweek` — FitWeek Mobile App
+AI-powered wardrobe planner app (Expo Go + EAS Android builds).
+
+**Feature scope (Issue 1 — Foundation + Auth):**
+- Supabase Auth via Google OAuth (`expo-web-browser` + `expo-linking`)
+- `AuthContext` — session, user, onboarding state, sign in/out
+- Auth gate in root `_layout.tsx` using `useSegments` + `useRootNavigationState`
+- Onboarding flow: model photo capture → Supabase Storage upload (with local fallback)
+- 4-tab navigation: Closet, Planner, Laundry, Profile
+- TDD tests: `__tests__/AuthContext.test.tsx` (6 tests, jest-expo preset)
+
+**Environment variables** (`artifacts/fitweek/.env`):
+- `EXPO_PUBLIC_SUPABASE_URL` — Supabase project URL
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY` — Supabase anon key (safe for client)
+- OpenAI and OWM keys go to `artifacts/api-server` (not the mobile client)
+
+**Deep link scheme**: `fitweek://` (Google OAuth redirect: `fitweek://auth/callback`)
+
+**Color palette** (constants/colors.ts):
+- Background: `#F7F5F2` (warm cream)
+- Primary: `#1A1A1A` (charcoal)
+- Accent: `#C4A882` (sandy taupe)
+- Status clean: `#34C759` / worn: `#FF9500` / laundry: `#FF3B30`
+
+**Testing**: `pnpm --filter @workspace/fitweek test`
+
+### `artifacts/api-server` — API Server
+Express 5 server handling server-side logic (OpenAI Vision calls, OWM weather, auth middleware).
 
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
+- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
+- `pnpm --filter @workspace/fitweek test` — run FitWeek unit tests
 
-See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+## Implementation Plan
+
+See `fitweek-implementation-plan.md` for full vertical slice plan (7 issues).
+Currently completed: **Issue 1 — Foundation + Auth**.
+
+## Architecture Decisions
+
+- Supabase for auth + storage + DB (managed by infra agent, credentials user-provided)
+- OpenAI Vision API calls go through `api-server` (key never exposed to Expo client)
+- OWM weather calls go through `api-server`
+- `hasCompletedOnboarding` stored in AsyncStorage (local) + Supabase `users.model_image_url` (remote)
+- VTO (virtual try-on) priority: dress/overalls → tops/shirts → skirts/trousers
