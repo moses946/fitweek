@@ -14,6 +14,21 @@ export type GarmentCategory =
 
 export type GarmentStatus = "clean" | "worn" | "laundry";
 
+export type OutfitSlotStatus = "draft" | "confirmed";
+
+export interface OutfitSlot {
+  id: string;
+  /** ISO date: YYYY-MM-DD */
+  date: string;
+  garmentIds: string[];
+  status: OutfitSlotStatus;
+  /** null = auto-generate from garment categories at confirm time */
+  name: string | null;
+  createdAt: string;
+  /** URL of VTO result image stored in Supabase Storage; null until generated */
+  vtoImageUrl?: string | null;
+}
+
 export interface Garment {
   id: string;
   imageUri: string;
@@ -31,4 +46,6 @@ export interface Garment {
   /** ISO datetime. Set by softDelete; null means the garment is live. */
   deletedAt: string | null;
   createdAt: string;
+  /** Natural-language description from Vision LLM — used as VTO prompt input. */
+  aiDescription?: string | null;
 }

@@ -72,6 +72,9 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.105.1"
+    "@supabase/supabase-js": "^2.105.1",
+    "expo-file-system": "^55.0.17",
+    "expo-notifications": "^0.32.17",
+    "expo-sharing": "^55.0.18"
   }
 }

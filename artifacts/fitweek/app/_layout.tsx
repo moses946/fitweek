@@ -16,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { GarmentProvider } from "@/contexts/GarmentContext";
+import { OutfitSlotProvider } from "@/contexts/OutfitSlotContext";
 import { WeatherProvider } from "@/contexts/WeatherContext";
 
 SplashScreen.preventAutoHideAsync();
@@ -54,6 +55,7 @@ function RootLayoutNav() {
         <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(garment)" options={{ presentation: "modal" }} />
+        <Stack.Screen name="(swipe)" options={{ presentation: "modal" }} />
         <Stack.Screen name="+not-found" />
       </Stack>
       <AuthGate />
@@ -85,9 +87,11 @@ export default function RootLayout() {
             <KeyboardProvider>
               <AuthProvider>
                 <GarmentProvider>
-                  <WeatherProvider>
-                    <RootLayoutNav />
-                  </WeatherProvider>
+                  <OutfitSlotProvider>
+                    <WeatherProvider>
+                      <RootLayoutNav />
+                    </WeatherProvider>
+                  </OutfitSlotProvider>
                 </GarmentProvider>
               </AuthProvider>
             </KeyboardProvider>

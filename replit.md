@@ -81,6 +81,35 @@ Completed: **Issues 1–4** (Auth, Garment Ingestion, Status/Laundry, Weather + 
 
 **Tests:** 67/67 passing across 5 suites (`weather.test.ts` Tests 1–3, `weatherFilter.test.ts` Tests 4–13)
 
+### Issue 5 — Outfit Assembly + Swipe Deck (COMPLETE)
+
+**New lib files:**
+- `lib/outfitSlots.ts` — pure slot mutations: `createSlot`, `updateSlot`, `deleteSlot`, `confirmSlot`, `cleanupDraftSlots`, `markAllWornInSlot`
+- `lib/outfitSlotNotifications.ts` — `computeNextSundayAt7pm()`, `scheduleSundayPlannerNotification()` (dynamic `expo-notifications` import, web-safe)
+
+**New context:**
+- `contexts/OutfitSlotContext.tsx` — `OutfitSlotProvider` (loads/persists slots via AsyncStorage, calls `useGarments()` for markWorn); `useOutfitSlots()` hook
+
+**New components:**
+- `components/SwipeCard.tsx` — Reanimated v4 + GestureDetector pan swipe card; left=skip, right=add to outfit; haptic feedback
+- `components/OutfitAssemblyPanel.tsx` — bottom drawer showing assembled outfit garments for a date
+
+**New screens:**
+- `app/(swipe)/_layout.tsx` — swipe stack layout
+- `app/(swipe)/[date].tsx` — full swipe deck screen; liveDeck + sessionPool; low-deck reintroduction (≤3 → requeue skipped)
+
+**Updated screens:**
+- `app/(tabs)/planner.tsx` — week grid with confirmed outfit cards per day; tap opens swipe deck
+- `app/_layout.tsx` — `OutfitSlotProvider` added inside `GarmentProvider`, outside `WeatherProvider`
+
+**Types:**
+- `lib/types.ts` — `OutfitSlot`, `OutfitSlotStatus` added
+
+**Package fix:**
+- `expo-notifications` downgraded from `55.0.22` → `0.32.17` (correct version for Expo SDK 54)
+
+**Tests:** 95/95 passing across 6 suites (`outfitSlots.test.ts` Tests 1–10 new; prior 85 intact)
+
 ## Architecture Decisions
 
 - Supabase for auth + storage + DB (managed by infra agent, credentials user-provided)
