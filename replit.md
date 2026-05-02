@@ -59,7 +59,27 @@ Express 5 server handling server-side logic (OpenAI Vision calls, OWM weather, a
 ## Implementation Plan
 
 See `fitweek-implementation-plan.md` for full vertical slice plan (7 issues).
-Currently completed: **Issue 1 — Foundation + Auth**.
+Completed: **Issues 1–4** (Auth, Garment Ingestion, Status/Laundry, Weather + Suggestion Filter).
+
+### Issue 4 — Weather Service + Suggestion Filter
+
+**New lib files:**
+- `lib/weather.ts` — `getWeatherForecast(lat,lon)` + `getWeatherForecastByCity(city)`, AsyncStorage cache (24h TTL), `ForecastResult` / `DailyForecast` types
+- `lib/weatherFilter.ts` — `getSuggestableCategories(forecast)`, `isWeatherAppropriate()`, `ALL_CATEGORIES`
+- `lib/suggestionFilter.ts` — `filterSuggestableWithWeather()`, `interleaveByCategory()`, `sortByRecency()`, `buildSuggestionDeck()`
+
+**New context + components:**
+- `contexts/WeatherContext.tsx` — GPS permission, fallback city, AsyncStorage city persistence, `useWeather()` hook
+- `components/WeatherBadge.tsx` — compact (emoji + °C) and full (range + label) variants; `WeatherUnavailableBadge`
+
+**Updated screens:**
+- `app/(tabs)/planner.tsx` — week day strip with weather badges, location permission prompt, city input card, per-day override toggle, cached/unavailable banners
+- `app/_layout.tsx` — `WeatherProvider` added inside `GarmentProvider`
+
+**API Server:**
+- `api-server/src/routes/weather.ts` — `GET /weather/forecast?lat&lon` or `?city`; proxies OWM 5-day/3-hour API, aggregates to daily; requires `OWM_API_KEY` env var
+
+**Tests:** 67/67 passing across 5 suites (`weather.test.ts` Tests 1–3, `weatherFilter.test.ts` Tests 4–13)
 
 ## Architecture Decisions
 

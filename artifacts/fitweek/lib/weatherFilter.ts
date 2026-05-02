@@ -1,17 +1,14 @@
 /**
- * Issue 4 — Weather-based category filter
+ * Weather-aware garment category filter.
  *
- * Maps garment categories to weather suitability thresholds.
- * No side effects — pure functions, fully testable.
- *
- * TDD — Tests 4-6:
- *   Test 4: 32°C sunny → 'outerwear' excluded
- *   Test 5: 5°C rainy  → 'outerwear' included, all categories available
+ * Issue 4 TDD — Tests 4-6:
+ *   Test 4: 32°C sunny → 'outerwear' excluded; 'shoes', 'tops', etc. included
+ *   Test 5: 5°C rainy  → 'dresses' excluded; 'outerwear' included
  *   Test 6: null forecast → all categories returned (no filtering)
  */
 
-import { GarmentCategory } from "./types";
 import { DailyForecast } from "./weather";
+import { GarmentCategory } from "./types";
 
 export const ALL_CATEGORIES: GarmentCategory[] = [
   "tops",
@@ -23,33 +20,39 @@ export const ALL_CATEGORIES: GarmentCategory[] = [
   "other",
 ];
 
-/** Average temp above which outerwear is excluded from suggestions. */
-export const HOT_THRESHOLD_C = 25;
+/** Weather conditions that are "cold-friendly" (outerwear recommended). */
+const COLD_CONDITIONS = new Set(["rainy", "snowy", "thunderstorm", "windy"]);
 
 /**
- * Returns the garment categories appropriate for the given day's forecast.
- * When forecast is null (weather unavailable), all categories are returned.
+ * Returns the set of categories that are weather-appropriate for the given
+ * daily forecast. When forecast is null (weather unavailable), returns all.
+ *
+ * Rules:
+ *  - outerwear : include when tempMax < 20 °C
+ *  - dresses   : include when tempMax ≥ 15 °C AND condition is not cold/wet
+ *  - all others: always included
  */
 export function getSuggestableCategories(
   forecast: DailyForecast | null,
 ): GarmentCategory[] {
   if (!forecast) return [...ALL_CATEGORIES];
 
-  const avgTemp = (forecast.tempMin + forecast.tempMax) / 2;
-  const excluded = new Set<GarmentCategory>();
+  const { tempMax, condition } = forecast;
+  const isCold = tempMax < 20;
+  const isWet = COLD_CONDITIONS.has(condition);
 
-  if (avgTemp > HOT_THRESHOLD_C) {
-    excluded.add("outerwear");
-  }
-
-  return ALL_CATEGORIES.filter((c) => !excluded.has(c));
+  return ALL_CATEGORIES.filter((cat) => {
+    if (cat === "outerwear") return isCold;
+    if (cat === "dresses") return tempMax >= 15 && !isWet;
+    return true;
+  });
 }
 
 /**
- * Returns true if a garment with the given category is appropriate for
- * the given day's forecast.
+ * Returns true when the garment's category is weather-appropriate.
+ * Always returns true when forecast is null (no filtering).
  */
-export function isCategoryWeatherAppropriate(
+export function isWeatherAppropriate(
   category: GarmentCategory,
   forecast: DailyForecast | null,
 ): boolean {

@@ -16,16 +16,12 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { GarmentProvider } from "@/contexts/GarmentContext";
+import { WeatherProvider } from "@/contexts/WeatherContext";
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
-/**
- * AuthGate — reads auth state and redirects to the correct screen group.
- * Must be rendered inside the Stack (within expo-router context).
- */
 function AuthGate() {
   const { session, isLoading, hasCompletedOnboarding } = useAuth();
   const segments = useSegments();
@@ -33,7 +29,6 @@ function AuthGate() {
   const navState = useRootNavigationState();
 
   useEffect(() => {
-    // Wait for navigation to be ready and auth to finish loading
     if (!navState?.key || isLoading) return;
 
     const inAuth = segments[0] === "(auth)";
@@ -90,7 +85,9 @@ export default function RootLayout() {
             <KeyboardProvider>
               <AuthProvider>
                 <GarmentProvider>
-                  <RootLayoutNav />
+                  <WeatherProvider>
+                    <RootLayoutNav />
+                  </WeatherProvider>
                 </GarmentProvider>
               </AuthProvider>
             </KeyboardProvider>
