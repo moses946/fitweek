@@ -1,5 +1,5 @@
 import { AntDesign, Feather } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -76,16 +76,15 @@ export default function SignInScreen() {
       )}
 
       <View style={styles.content}>
-        {/* Wordmark */}
+        {/* Logo */}
         <View style={styles.logoArea}>
-          <LinearGradient
-            colors={["#7B61FF", "#4DA3FF"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.wordmarkGradient}
-          >
-            <Text style={styles.wordmark}>FitWeek</Text>
-          </LinearGradient>
+          <View style={styles.logoBadge}>
+            <Image
+              source={require("@/assets/images/Logo2.png")}
+              style={styles.logoImage}
+              contentFit="contain"
+            />
+          </View>
           <Text style={[styles.tagline, { color: colors.mutedForeground }]}>
             Your wardrobe. Planned.
           </Text>
@@ -162,13 +161,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     gap: 36,
   },
-  logoArea: { alignItems: "center", gap: 10 },
-  wordmarkGradient: { borderRadius: 4, paddingHorizontal: 2 },
-  wordmark: {
-    fontSize: 44,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: -1.5,
-    color: "#FFFFFF",
+  logoArea: { alignItems: "center", gap: 14 },
+  logoBadge: {
+    backgroundColor: "#0F172A",
+    borderRadius: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+  },
+  logoImage: {
+    width: 220,
+    height: 72,
   },
   tagline: {
     fontSize: 16,
