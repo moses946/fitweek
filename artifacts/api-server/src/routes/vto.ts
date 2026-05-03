@@ -204,8 +204,25 @@ router.post("/vto/tryon", async (req, res) => {
     ];
 
     const resultUrl = await callTryon(payload);
-    req.log.info({ resultUrl }, "VTO complete");
-    return res.json({ resultUrl });
+    req.log.info({ resultUrl }, "VTO complete — downloading result image");
+
+    // Download the result image immediately so the client never depends on
+    // a Gradio temp-file URL (which expires within minutes).
+    let resultBase64: string | null = null;
+    try {
+      const resultImageRes = await fetch(resultUrl);
+      if (resultImageRes.ok) {
+        const resultBuf = Buffer.from(await resultImageRes.arrayBuffer());
+        resultBase64 = resultBuf.toString("base64");
+        req.log.info({ bytes: resultBuf.byteLength }, "VTO result image downloaded");
+      } else {
+        req.log.warn({ status: resultImageRes.status }, "Could not download VTO result image — returning URL only");
+      }
+    } catch (err) {
+      req.log.warn({ err }, "VTO result download failed — returning URL only");
+    }
+
+    return res.json({ resultUrl, resultBase64 });
   } catch (err) {
     req.log.error({ err }, "VTO proxy error");
     return res.status(500).json({

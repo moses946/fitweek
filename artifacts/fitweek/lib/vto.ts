@@ -8,6 +8,8 @@
  * Garment priority: dresses/overalls → tops → bottoms → outerwear → shoes
  */
 
+import * as FileSystem from "expo-file-system/legacy";
+
 import { Garment, GarmentCategory, OutfitSlot } from "./types";
 
 // ── Error type ────────────────────────────────────────────────────────────────
@@ -136,14 +138,31 @@ export async function callVTO(
       throw new VtoError("VTO_ERROR", errBody.error ?? `Proxy returned ${res.status}`);
     }
 
-    const body = (await res.json()) as { resultUrl?: string };
+    const body = (await res.json()) as { resultUrl?: string; resultBase64?: string };
     console.log("[VTO:lib] Proxy success body keys:", Object.keys(body));
-    const { resultUrl } = body;
+    const { resultUrl, resultBase64 } = body;
+
+    // Prefer base64 — write it to device cache so the image never expires
+    if (resultBase64) {
+      console.log("[VTO:lib] resultBase64 received, length:", resultBase64.length);
+      try {
+        const cacheDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
+        const localUri = `${cacheDir}fitweek_vto_${Date.now()}.png`;
+        await FileSystem.writeAsStringAsync(localUri, resultBase64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        console.log("[VTO:lib] VTO result saved locally:", localUri);
+        return localUri;
+      } catch (writeErr) {
+        console.warn("[VTO:lib] Could not write VTO result to cache, falling back to URL:", writeErr);
+      }
+    }
+
     if (!resultUrl) {
       console.error("[VTO:lib] resultUrl missing in response body:", body);
       throw new VtoError("VTO_ERROR", "No resultUrl in proxy response");
     }
-    console.log("[VTO:lib] resultUrl:", resultUrl.slice(0, 100));
+    console.log("[VTO:lib] resultUrl (fallback):", resultUrl.slice(0, 100));
     return resultUrl;
   } catch (err) {
     if (err instanceof VtoError) throw err;

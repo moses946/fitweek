@@ -597,7 +597,16 @@ export default function PlannerScreen() {
       return;
     }
 
-    console.log("[VTO] garmentDescription:", hero.aiDescription ?? hero.name);
+    // Build a meaningful description — "Other" confuses IDM-VTON and causes blank output
+    const garmentDesc = (() => {
+      if (hero.aiDescription) return hero.aiDescription;
+      const nameLower = hero.name.toLowerCase();
+      if (nameLower === "other" || nameLower === hero.category.toLowerCase()) {
+        return `${hero.category} garment`;
+      }
+      return `${hero.name}, ${hero.category} garment`;
+    })();
+    console.log("[VTO] garmentDescription:", garmentDesc);
 
     // If the model photo is a local file URI (Supabase upload failed / iOS Expo Go),
     // read it as base64 on-device so the server doesn't have to fetch a file:// URL.
@@ -628,7 +637,7 @@ export default function PlannerScreen() {
       const resultUrl = await callVTO(
         isLocalModelUri ? null : modelImageUrl,
         garmentBase64,
-        hero.aiDescription ?? hero.name,
+        garmentDesc,
         controller.signal,
         modelBase64,
       );
