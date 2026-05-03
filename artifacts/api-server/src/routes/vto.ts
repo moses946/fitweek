@@ -48,13 +48,13 @@ function makeFileData(path: string) {
 
 /**
  * Call the Gradio Space to run the tryon function.
- * Tries Gradio 4 (/gradio_api/call/tryon) then Gradio 3 (/call/tryon).
+ * IDM-VTON Space uses /call/tryon (Gradio 3 format) even though it runs Gradio 4.
  *
  * Throws an error starting with GRADIO_DATA_NULL when the Space returns
  * `data: null` — which means it is cold-starting or at capacity.
  */
 async function callTryon(data: unknown[]): Promise<string> {
-  const endpoints = ["/gradio_api/call/tryon", "/call/tryon"];
+  const endpoints = ["/call/tryon"];
 
   for (const endpoint of endpoints) {
     let eventId: string | undefined;
