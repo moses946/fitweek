@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
@@ -18,8 +19,14 @@ import { useColors } from "@/hooks/useColors";
 export default function ModelPhotoScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { pickModelPhoto, completeOnboarding } = useAuth();
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const router = useRouter();
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const isUpdateMode = mode === "update";
+
+  const { pickModelPhoto, completeOnboarding, modelImageUrl } = useAuth();
+  const [photoUri, setPhotoUri] = useState<string | null>(
+    isUpdateMode ? (modelImageUrl ?? null) : null,
+  );
   const [isSaving, setIsSaving] = useState(false);
 
   const handlePickPhoto = async () => {
@@ -27,7 +34,10 @@ export default function ModelPhotoScreen() {
       const uri = await pickModelPhoto();
       if (uri) setPhotoUri(uri);
     } catch {
-      Alert.alert("Photo error", "Could not access your photo library. Please check permissions.");
+      Alert.alert(
+        "Photo error",
+        "Could not access your photo library. Please check permissions.",
+      );
     }
   };
 
@@ -35,15 +45,20 @@ export default function ModelPhotoScreen() {
     setIsSaving(true);
     try {
       await completeOnboarding(photoUri);
+      if (isUpdateMode) {
+        router.back();
+      } else {
+        router.replace("/(tabs)");
+      }
     } catch {
       Alert.alert("Error", "Something went wrong. Please try again.");
-    } finally {
       setIsSaving(false);
     }
   };
 
   const handleSkip = async () => {
     await completeOnboarding(null);
+    router.replace("/(tabs)");
   };
 
   const TIPS = [
@@ -51,6 +66,21 @@ export default function ModelPhotoScreen() {
     { icon: "sun" as const, text: "Good lighting, plain background" },
     { icon: "user-check" as const, text: "Stand naturally, arms by your sides" },
   ];
+
+  const title = isUpdateMode ? "Update model photo" : "Your model photo";
+  const subtitle = isUpdateMode
+    ? "Replace your current photo. Used to generate virtual try-on previews."
+    : "Used to generate virtual try-on previews. Take a full-body photo against a plain wall.";
+
+  const continueLabel = isUpdateMode
+    ? photoUri === modelImageUrl
+      ? "No changes"
+      : "Save changes"
+    : photoUri
+      ? "Continue"
+      : "Continue without photo";
+
+  const continueDisabled = isUpdateMode && photoUri === modelImageUrl;
 
   return (
     <View
@@ -63,10 +93,18 @@ export default function ModelPhotoScreen() {
         },
       ]}
     >
+      {isUpdateMode && (
+        <View style={styles.navBar}>
+          <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={12}>
+            <Feather name="arrow-left" size={22} color={colors.foreground} />
+          </Pressable>
+        </View>
+      )}
+
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.foreground }]}>Your model photo</Text>
+        <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
         <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-          Used to generate virtual try-on previews. Take a full-body photo against a plain wall.
+          {subtitle}
         </Text>
       </View>
 
@@ -76,7 +114,9 @@ export default function ModelPhotoScreen() {
             <Image source={{ uri: photoUri }} style={styles.photoPreview} contentFit="cover" />
             <View style={[styles.retakeOverlay, { backgroundColor: "#0F172ACC" }]}>
               <Feather name="refresh-cw" size={20} color="#FFFFFF" />
-              <Text style={styles.retakeText}>Retake</Text>
+              <Text style={styles.retakeText}>
+                {isUpdateMode ? "Change photo" : "Retake"}
+              </Text>
             </View>
           </Pressable>
         ) : (
@@ -114,11 +154,11 @@ export default function ModelPhotoScreen() {
           testID="continue-button"
           onPress={handleContinue}
           isLoading={isSaving}
-          disabled={false}
-          label={photoUri ? "Continue" : "Continue without photo"}
+          disabled={continueDisabled}
+          label={continueLabel}
         />
 
-        {photoUri && (
+        {!isUpdateMode && photoUri && (
           <Pressable onPress={handleSkip} testID="skip-button">
             <Text style={[styles.skipText, { color: colors.mutedForeground }]}>
               Skip for now
@@ -132,6 +172,16 @@ export default function ModelPhotoScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  navBar: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   header: { paddingHorizontal: 24, gap: 8, marginBottom: 24 },
   title: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
   subtitle: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22 },

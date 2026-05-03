@@ -298,7 +298,7 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="user"
             label="Update model photo"
-            onPress={() => router.push("/(onboarding)/model-photo")}
+            onPress={() => router.push("/(onboarding)/model-photo?mode=update")}
             testID="update-model-photo"
           />
           <SettingsRow
