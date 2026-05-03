@@ -1,0 +1,63 @@
+1. Install the client if you don't already have it installed.
+
+$ npm i -D @gradio/client
+
+2. Find the API endpoint below corresponding to your desired function in the app. Copy the code snippet, replacing the placeholder values with your own input data. If this is a private Space, you may need to pass your Hugging Face token as well (read more). Run the code, that's it!
+api_name: /tryon
+
+import { client } from "@gradio/client";
+
+const response_0 = await fetch("https://raw.githubusercontent.com/gradio-app/gradio/main/test/test_files/bus.png");
+const exampleImage = await response_0.blob();
+						
+const app = await client("yisol/IDM-VTON");
+const result = await app.predict("/tryon", [		
+				{"background":file('https://raw.githubusercontent.com/gradio-app/gradio/main/test/test_files/bus.png'),"layers":[],"composite":null}, // undefined  in 'Human. Mask with pen or use auto-masking' Imageeditor component
+				exampleImage, 	// blob in 'Garment' Image component		
+				"Hello!!", // string  in 'parameter_17' Textbox component		
+				true, // boolean  in 'Yes' Checkbox component		
+				true, // boolean  in 'Yes' Checkbox component		
+				3, // number  in 'Denoising Steps' Number component		
+				3, // number  in 'Seed' Number component
+	]);
+
+console.log(result.data);
+
+Accepts 7 parameters:
+
+[0] undefined Required
+
+The input value that is provided in the "Human. Mask with pen or use auto-masking" Imageeditor component.
+
+[1] Blob | File | Buffer Required
+
+The input value that is provided in the "Garment" Image component.
+
+[2] string Required
+
+The input value that is provided in the "parameter_17" Textbox component.
+
+[3] boolean Required
+
+The input value that is provided in the "Yes" Checkbox component.
+
+[4] boolean Required
+
+The input value that is provided in the "Yes" Checkbox component.
+
+[5] number Required
+
+The input value that is provided in the "Denoising Steps" Number component.
+
+[6] number Required
+
+The input value that is provided in the "Seed" Number component.
+Returns list of 2 elements
+
+[0] string
+
+The output value that appears in the "Output" Image component.
+
+[1] string
+
+The output value that appears in the "Masked image output" Image component.
