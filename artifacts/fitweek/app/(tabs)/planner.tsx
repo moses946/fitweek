@@ -1,7 +1,9 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import * as FileSystem from "expo-file-system/legacy";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import * as Sharing from "expo-sharing";
 import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -538,18 +540,15 @@ export default function PlannerScreen() {
     const ics = generateICS(confirmedSlots, garments, forecast ?? []);
 
     try {
-      const FileSystem = await import("expo-file-system");
-      const Sharing = await import("expo-sharing");
-
       const cacheDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
       const fileUri = `${cacheDir}fitweek-outfits.ics`;
       await FileSystem.writeAsStringAsync(fileUri, ics, {
-        encoding: "utf8",
+        encoding: FileSystem.EncodingType.UTF8,
       });
 
-      const canShare = await Sharing.default.isAvailableAsync();
+      const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-        await Sharing.default.shareAsync(fileUri, {
+        await Sharing.shareAsync(fileUri, {
           mimeType: ICS_MIME_TYPE,
           dialogTitle: "Export FitWeek calendar",
           UTI: "public.calendar",

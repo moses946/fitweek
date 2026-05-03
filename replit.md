@@ -59,7 +59,7 @@ Express 5 server handling server-side logic (OpenAI Vision calls, OWM weather, a
 ## Implementation Plan
 
 See `fitweek-implementation-plan.md` for full vertical slice plan (7 issues).
-Completed: **Issues 1–4** (Auth, Garment Ingestion, Status/Laundry, Weather + Suggestion Filter).
+Completed: **All 7 Issues** ✅ (Auth, Garment Ingestion, Status/Laundry, Weather + Suggestion Filter, Outfit Slots + Swipe Deck, VTO, Calendar Export + Share Card).
 
 ### Issue 4 — Weather Service + Suggestion Filter
 
@@ -109,6 +109,34 @@ Completed: **Issues 1–4** (Auth, Garment Ingestion, Status/Laundry, Weather + 
 - `expo-notifications` downgraded from `55.0.22` → `0.32.17` (correct version for Expo SDK 54)
 
 **Tests:** 95/95 passing across 6 suites (`outfitSlots.test.ts` Tests 1–10 new; prior 85 intact)
+
+### Issue 6 — Virtual Try-On (COMPLETE)
+
+**New lib files:**
+- `lib/vto.ts` — `selectHeroGarment(garments[])` (priority: dresses→tops→bottoms→outerwear), `callVTO(modelUri, garmentUri, desc, signal?)` (Gradio IDM-VTON REST API, AbortController timeout), `saveVTOResult(slots, slotId, url)` (pure slot update), `VtoError` class with `code: 'VTO_TIMEOUT'|'VTO_ERROR'`
+
+**Context update:**
+- `contexts/OutfitSlotContext.tsx` — `updateSlotVtoImage(slotId, url)` added (persists VTO URL to AsyncStorage)
+
+**Updated screens:**
+- `app/(tabs)/planner.tsx` — "Try on" / "Re-try on" button on confirmed outfit cards; full-screen VTO loading `Modal` with cancel (AbortController); VTO result image displayed above thumbnails with "Regenerate" overlay button; redirects to profile if model photo missing
+
+**Tests:** `vto.test.ts` Tests 1–10 (selectHeroGarment priority, callVTO mock success/abort/error, null model, saveVTOResult)
+
+**Packages:**
+- `expo-file-system@~19.0.22`, `expo-sharing@~14.0.8` installed (correct SDK 54 versions)
+
+### Issue 7 — Calendar Export + Share Card (COMPLETE)
+
+**New lib files:**
+- `lib/ics.ts` — `generateICS(slots, garments, forecast[])` (valid RFC 5545 iCal; soft-deleted garments silently omitted; auto-name via `autoName()` when slot.name=null), `generateShareCard(slot, garments, forecast?)` → `ShareCardData { type:'vto'|'collage', primaryImageUri, garmentImageUris, dayLabel, weatherSummary }`, `ICS_MIME_TYPE = 'text/calendar'`
+
+**Updated screens:**
+- `app/(tabs)/planner.tsx` — calendar export icon (📅) in header; writes `.ics` via `expo-file-system/legacy`, opens native share sheet via `expo-sharing`; "Share" button on each confirmed outfit card (native `Share.share()` with outfit text + VTO URL)
+
+**Tests:** `ics.test.ts` Tests 1–8 (ICS structure, SUMMARY, DESCRIPTION, auto-name, soft-delete, share card vto/collage, MIME type)
+
+**Final test count:** 113/113 across 8 suites — zero TypeScript errors
 
 ## Architecture Decisions
 
