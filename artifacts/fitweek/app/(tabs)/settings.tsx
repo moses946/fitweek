@@ -1,4 +1,6 @@
 import { Feather } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -16,7 +18,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { LinearGradient } from "expo-linear-gradient";
 import brandColors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWeather } from "@/contexts/WeatherContext";
@@ -26,12 +27,13 @@ import { scheduleSundayPlannerNotification } from "@/lib/outfitSlotNotifications
 interface SettingsRowProps {
   icon: string;
   label: string;
+  value?: string;
   onPress?: () => void;
   destructive?: boolean;
   testID?: string;
 }
 
-function SettingsRow({ icon, label, onPress, destructive, testID }: SettingsRowProps) {
+function SettingsRow({ icon, label, value, onPress, destructive, testID }: SettingsRowProps) {
   const colors = useColors();
   const labelColor = destructive ? colors.destructive : colors.foreground;
 
@@ -46,6 +48,9 @@ function SettingsRow({ icon, label, onPress, destructive, testID }: SettingsRowP
     >
       <Feather name={icon as any} size={18} color={labelColor} />
       <Text style={[styles.rowLabel, { color: labelColor }]}>{label}</Text>
+      {value ? (
+        <Text style={[styles.rowValue, { color: colors.mutedForeground }]}>{value}</Text>
+      ) : null}
       {!destructive && (
         <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
       )}
@@ -207,7 +212,7 @@ function NotificationsModal({ visible, onClose }: { visible: boolean; onClose: (
           <Switch
             value={enabled}
             onValueChange={handleToggle}
-            trackColor={{ true: brandColors.primary }}
+            trackColor={{ true: brandColors.light.primary }}
           />
         </View>
 
@@ -225,16 +230,86 @@ function NotificationsModal({ visible, onClose }: { visible: boolean; onClose: (
   );
 }
 
+// ── Birthday modal ────────────────────────────────────────────────────────────
+
+function BirthdayModal({
+  visible,
+  current,
+  onClose,
+  onSave,
+}: {
+  visible: boolean;
+  current: string | null;
+  onClose: () => void;
+  onSave: (value: string) => void;
+}) {
+  const colors = useColors();
+  const [input, setInput] = useState(current ?? "");
+
+  useEffect(() => {
+    if (visible) setInput(current ?? "");
+  }, [visible, current]);
+
+  const handleSave = () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    onSave(trimmed);
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose} />
+      <View style={[styles.sheet, { backgroundColor: colors.card }]}>
+        <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+        <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Date of birth</Text>
+        <Text style={[styles.sheetBody, { color: colors.mutedForeground }]}>
+          Google doesn't share your birthdate — enter it here so FitWeek can personalise seasonal suggestions.
+        </Text>
+        <TextInput
+          style={[styles.cityInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+          placeholder="e.g. 15 March 1995"
+          placeholderTextColor={colors.mutedForeground}
+          value={input}
+          onChangeText={setInput}
+          onSubmitEditing={handleSave}
+          returnKeyType="done"
+          autoFocus
+        />
+        <View style={styles.sheetActions}>
+          <Pressable onPress={handleSave} style={{ flex: 1 }}>
+            <LinearGradient
+              colors={brandColors.gradientPrimary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.sheetBtn}
+            >
+              <Text style={styles.sheetBtnLabel}>Save</Text>
+            </LinearGradient>
+          </Pressable>
+          <Pressable
+            style={[styles.sheetBtnOutline, { borderColor: colors.border, flex: 1 }]}
+            onPress={onClose}
+          >
+            <Text style={[styles.sheetBtnOutlineLabel, { color: colors.foreground }]}>Cancel</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user, signOut } = useAuth();
+  const { user, userProfile, signOut, updateBirthdate } = useAuth();
   const router = useRouter();
 
   const [locationModalVisible, setLocationModalVisible] = useState(false);
   const [notifModalVisible, setNotifModalVisible] = useState(false);
+  const [birthdayModalVisible, setBirthdayModalVisible] = useState(false);
 
   const handleSignOut = () => {
     Alert.alert("Sign out", "Are you sure you want to sign out?", [
@@ -250,8 +325,17 @@ export default function SettingsScreen() {
     ]);
   };
 
-  const displayName = user?.user_metadata?.["full_name"] ?? user?.email ?? "Your account";
-  const email = user?.email ?? "";
+  // Prefer Supabase-persisted profile, fall back to live user_metadata from session.
+  const displayName =
+    userProfile?.name ??
+    user?.user_metadata?.["full_name"] ??
+    user?.user_metadata?.["name"] ??
+    user?.email ??
+    "Your account";
+  const email = userProfile?.email ?? user?.email ?? "";
+  const avatarUrl = userProfile?.avatarUrl ?? user?.user_metadata?.["avatar_url"] ?? null;
+  const birthdate = userProfile?.birthdate ?? null;
+
   const initials = displayName
     .split(" ")
     .map((n: string) => n[0])
@@ -269,6 +353,12 @@ export default function SettingsScreen() {
         visible={notifModalVisible}
         onClose={() => setNotifModalVisible(false)}
       />
+      <BirthdayModal
+        visible={birthdayModalVisible}
+        current={birthdate}
+        onClose={() => setBirthdayModalVisible(false)}
+        onSave={updateBirthdate}
+      />
 
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
@@ -283,13 +373,26 @@ export default function SettingsScreen() {
         <Text style={[styles.screenTitle, { color: colors.foreground }]}>Profile</Text>
 
         <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.avatar, { backgroundColor: colors.accent }]}>
-            <Text style={[styles.avatarInitials, { color: colors.card }]}>{initials || "?"}</Text>
-          </View>
+          {avatarUrl ? (
+            <Image
+              source={{ uri: avatarUrl }}
+              style={styles.avatarImage}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={[styles.avatarPlaceholder, { backgroundColor: colors.accent }]}>
+              <Text style={[styles.avatarInitials, { color: colors.card }]}>{initials || "?"}</Text>
+            </View>
+          )}
           <View style={styles.profileInfo}>
             <Text style={[styles.profileName, { color: colors.foreground }]}>{displayName}</Text>
             {!!email && (
               <Text style={[styles.profileEmail, { color: colors.mutedForeground }]}>{email}</Text>
+            )}
+            {!!birthdate && (
+              <Text style={[styles.profileBirthdate, { color: colors.mutedForeground }]}>
+                🎂 {birthdate}
+              </Text>
             )}
           </View>
         </View>
@@ -300,6 +403,13 @@ export default function SettingsScreen() {
             label="Update model photo"
             onPress={() => router.push("/(onboarding)/model-photo?mode=update")}
             testID="update-model-photo"
+          />
+          <SettingsRow
+            icon="gift"
+            label="Date of birth"
+            value={birthdate ?? "Not set"}
+            onPress={() => setBirthdayModalVisible(true)}
+            testID="date-of-birth"
           />
           <SettingsRow
             icon="map-pin"
@@ -348,17 +458,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 14,
   },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+  avatarImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+  },
+  avatarPlaceholder: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarInitials: { fontSize: 20, fontFamily: "Inter_700Bold" },
-  profileInfo: { flex: 1 },
+  profileInfo: { flex: 1, gap: 2 },
   profileName: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  profileEmail: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
+  profileEmail: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  profileBirthdate: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   section: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
   row: {
     flexDirection: "row",
@@ -369,6 +485,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowLabel: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
+  rowValue: { fontSize: 13, fontFamily: "Inter_400Regular" },
   version: {
     textAlign: "center",
     fontSize: 12,

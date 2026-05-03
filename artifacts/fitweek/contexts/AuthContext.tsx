@@ -11,7 +11,6 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 WebBrowser.maybeCompleteAuthSession();
 
 // Keys are per-user so a new account on the same device starts fresh.
-// Falls back to a generic key when there is no user ID (e.g. Supabase not configured).
 function onboardingKey(userId: string | undefined) {
   return userId
     ? `@fitweek/onboarding_complete/${userId}`
@@ -23,16 +22,25 @@ function modelUrlKey(userId: string | undefined) {
     : "@fitweek/model_image_url";
 }
 
+export interface UserProfile {
+  name: string | null;
+  avatarUrl: string | null;
+  email: string | null;
+  birthdate: string | null;
+}
+
 export interface AuthContextValue {
   session: Session | null;
   user: User | null;
   isLoading: boolean;
   hasCompletedOnboarding: boolean;
   modelImageUrl: string | null;
+  userProfile: UserProfile | null;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
   completeOnboarding: (modelImageUrl: string | null) => Promise<void>;
   pickModelPhoto: () => Promise<string | null>;
+  updateBirthdate: (birthdate: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -43,23 +51,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [modelImageUrl, setModelImageUrl] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
-  // Load onboarding + model URL for a given user ID.
-  // Checks AsyncStorage first; on login also fetches the model URL from Supabase
-  // so it works on new devices where the local cache is empty.
+  /**
+   * Push the user's Google identity (name, avatar, email) into the users table.
+   * Called on every login so the server-side record stays fresh.
+   * Requires the users table to have columns: full_name, avatar_url, email.
+   */
+  const syncGoogleProfile = async (u: User) => {
+    if (!isSupabaseConfigured) return;
+    const meta = u.user_metadata ?? {};
+    try {
+      await supabase.from("users").upsert(
+        {
+          id: u.id,
+          full_name: meta["full_name"] ?? meta["name"] ?? null,
+          avatar_url: meta["avatar_url"] ?? meta["picture"] ?? null,
+          email: u.email ?? null,
+        },
+        { onConflict: "id" },
+      );
+    } catch {
+      // Non-fatal — columns may not exist yet in the schema.
+    }
+  };
+
+  /**
+   * Load per-user data: onboarding flag, model URL, and full profile from Supabase.
+   * Checks local cache first; falls back to Supabase for new devices.
+   */
   const loadUserData = async (userId: string | undefined) => {
     try {
-      const [onboarded, storedUrl] = await Promise.all([
+      const [onboarded, storedModelUrl] = await Promise.all([
         AsyncStorage.getItem(onboardingKey(userId)),
         AsyncStorage.getItem(modelUrlKey(userId)),
       ]);
       setHasCompletedOnboarding(onboarded === "true");
 
-      if (storedUrl) {
-        // Already cached locally — use it immediately.
-        setModelImageUrl(storedUrl);
+      if (storedModelUrl) {
+        setModelImageUrl(storedModelUrl);
       } else if (userId && isSupabaseConfigured) {
-        // No local cache (e.g. new device) — fetch from Supabase.
+        // No local cache (e.g. new device) — fetch model URL from Supabase.
         try {
           const { data } = await supabase
             .from("users")
@@ -72,7 +104,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setModelImageUrl(remoteUrl);
           }
         } catch {
-          // Supabase fetch failed — model URL stays null, user can re-upload.
+          // Non-fatal
+        }
+      }
+
+      // Fetch full profile (name, avatar, email, birthdate) from Supabase.
+      if (userId && isSupabaseConfigured) {
+        try {
+          const { data } = await supabase
+            .from("users")
+            .select("full_name, avatar_url, email, birthdate")
+            .eq("id", userId)
+            .single();
+          if (data) {
+            setUserProfile({
+              name: data.full_name ?? null,
+              avatarUrl: data.avatar_url ?? null,
+              email: data.email ?? null,
+              birthdate: data.birthdate ?? null,
+            });
+          }
+        } catch {
+          // Non-fatal — profile stays null; Settings will fall back to user_metadata.
         }
       }
     } catch {
@@ -84,21 +137,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let mounted = true;
 
     const init = async () => {
-      let userId: string | undefined;
+      let currentUser: User | undefined;
 
       try {
         const { data } = await supabase.auth.getSession();
         if (mounted) {
           setSession(data.session);
           setUser(data.session?.user ?? null);
-          userId = data.session?.user?.id;
+          currentUser = data.session?.user;
         }
       } catch {
         // Supabase not configured yet — session stays null
       }
 
       if (mounted) {
-        await loadUserData(userId);
+        await loadUserData(currentUser?.id);
         setIsLoading(false);
       }
     };
@@ -111,8 +164,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!mounted) return;
       setSession(newSession);
       setUser(newSession?.user ?? null);
-      // Reload per-user data whenever the account changes (sign-in / sign-out / token refresh).
-      loadUserData(newSession?.user?.id);
+      const newUser = newSession?.user;
+      if (newUser) {
+        // Sync Google profile data to Supabase on every login (fire and forget).
+        syncGoogleProfile(newUser);
+      } else {
+        // Signed out — clear profile from memory.
+        setUserProfile(null);
+      }
+      // Reload per-user data (model URL, birthdate, onboarding flag).
+      loadUserData(newUser?.id);
     });
 
     return () => {
@@ -178,14 +239,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Clear this user's model URL (can become stale after session ends).
-    // Onboarding flag is kept — if the same account signs in again they skip onboarding.
-    // If a brand-new account signs in, their own key won't exist → onboarding shows.
+    // Onboarding flag is kept — same account skips onboarding on next login.
+    // New accounts have their own per-user key so they still see onboarding.
     if (currentUserId) {
       await AsyncStorage.removeItem(modelUrlKey(currentUserId));
     }
 
     setModelImageUrl(null);
     setHasCompletedOnboarding(false);
+    setUserProfile(null);
   };
 
   const completeOnboarding = async (url: string | null) => {
@@ -207,6 +269,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       } catch {
         // Non-fatal — local state already updated
+      }
+    }
+  };
+
+  const updateBirthdate = async (birthdate: string) => {
+    setUserProfile((prev) =>
+      prev ? { ...prev, birthdate } : { name: null, avatarUrl: null, email: null, birthdate },
+    );
+
+    if (isSupabaseConfigured && user) {
+      try {
+        await supabase.from("users").upsert(
+          { id: user.id, birthdate },
+          { onConflict: "id" },
+        );
+      } catch {
+        // Non-fatal
       }
     }
   };
@@ -264,10 +343,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         hasCompletedOnboarding,
         modelImageUrl,
+        userProfile,
         signIn,
         signOut,
         completeOnboarding,
         pickModelPhoto,
+        updateBirthdate,
       }}
     >
       {children}
