@@ -32,7 +32,7 @@ function AuthGate() {
   useEffect(() => {
     if (!navState?.key || isLoading) return;
 
-    const inAuth = segments[0] === "(auth)";
+    const inAuth = segments[0] === "(auth)" || segments[0] === "auth";
     const inOnboarding = segments[0] === "(onboarding)";
 
     if (!session) {
@@ -56,6 +56,7 @@ function RootLayoutNav() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(garment)" options={{ presentation: "modal" }} />
         <Stack.Screen name="(swipe)" options={{ presentation: "modal" }} />
+        <Stack.Screen name="auth/callback" />
         <Stack.Screen name="+not-found" />
       </Stack>
       <AuthGate />

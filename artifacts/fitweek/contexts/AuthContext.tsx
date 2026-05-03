@@ -4,6 +4,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { Platform } from "react-native";
 
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
@@ -87,7 +88,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
     }
 
-    const redirectTo = Linking.createURL("/auth/callback");
+    let redirectTo: string;
+    if (Platform.OS === "web") {
+      const domain = process.env.EXPO_PUBLIC_DOMAIN;
+      if (domain) {
+        redirectTo = `https://${domain}/fitweek/auth/callback`;
+      } else if (typeof window !== "undefined") {
+        redirectTo = `${window.location.origin}/fitweek/auth/callback`;
+      } else {
+        redirectTo = Linking.createURL("/auth/callback");
+      }
+    } else {
+      redirectTo = Linking.createURL("/auth/callback");
+    }
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
