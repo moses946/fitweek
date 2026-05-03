@@ -7,7 +7,7 @@
  * Test 4:  selectHeroGarment([])                       → null
  * Test 5:  callVTO() success                           → result URL returned
  * Test 6:  callVTO() aborted via signal                → VtoError(VTO_TIMEOUT)
- * Test 7:  callVTO() HTTP error on /call/tryon         → VtoError(VTO_ERROR)
+ * Test 7:  callVTO() proxy HTTP 500                    → VtoError(VTO_ERROR)
  * Test 8:  saveVTOResult(slotId, url)                  → slot.vtoImageUrl updated
  * Test 9:  callVTO() with null modelImageUri           → returns "" without fetching
  * Test 10: selectHeroGarment — overalls map to dresses category (highest priority)
@@ -20,24 +20,6 @@ import {
   saveVTOResult,
   VtoError,
 } from "../lib/vto";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Build a mock SSE ReadableStream reader that emits one chunk then closes. */
-function makeSseReader(text: string) {
-  let step = 0;
-  return {
-    read: async (): Promise<{ value: Uint8Array | undefined; done: boolean }> => {
-      if (step++ === 0) {
-        return { value: new TextEncoder().encode(text), done: false };
-      }
-      return { value: undefined, done: true };
-    },
-  };
-}
-
-const SSE_COMPLETE =
-  'event: complete\ndata: [{"url":"https://hf.space/result/try-on.jpg","path":"/tmp/r.jpg"}]\n\n';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -128,30 +110,26 @@ describe("callVTO", () => {
     jest.useRealTimers();
   });
 
-  test("Test 5: success — returns result image URL via SSE stream", async () => {
-    // HTTPS URIs skip the upload step; mock: POST /call/tryon, GET /call/tryon/{id}
-    global.fetch = jest
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ event_id: "ev1" }),
-      } as unknown as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        body: { getReader: () => makeSseReader(SSE_COMPLETE) },
-      } as unknown as Response);
+  test("Test 5: success — single proxy call returns resultUrl", async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ resultUrl: "https://hf.space/result/try-on.jpg" }),
+    } as unknown as Response);
 
     const url = await callVTO(
       "https://example.com/model.jpg",
-      "https://example.com/garment.jpg",
+      "base64garmentdata==",
       "navy blue dress",
     );
     expect(url).toBe("https://hf.space/result/try-on.jpg");
 
-    // Verify it called the correct endpoints
-    const calls = (global.fetch as jest.Mock).mock.calls;
-    expect(calls[0][0]).toContain("/call/tryon");
-    expect(calls[1][0]).toContain("/call/tryon/ev1");
+    const call = (global.fetch as jest.Mock).mock.calls[0];
+    expect(call[0]).toContain("/api/vto/tryon");
+    expect(JSON.parse(call[1].body)).toMatchObject({
+      modelImageUrl: "https://example.com/model.jpg",
+      garmentBase64: "base64garmentdata==",
+      garmentDescription: "navy blue dress",
+    });
   });
 
   test("Test 6: abort signal fires — throws VtoError with code VTO_TIMEOUT", async () => {
@@ -176,23 +154,24 @@ describe("callVTO", () => {
     await expect(
       callVTO(
         "https://example.com/model.jpg",
-        "https://example.com/garment.jpg",
+        "base64garmentdata==",
         "navy blue dress",
         controller.signal,
       ),
     ).rejects.toMatchObject({ code: "VTO_TIMEOUT" });
   });
 
-  test("Test 7: HTTP 500 on /call/tryon — throws VtoError with code VTO_ERROR", async () => {
+  test("Test 7: proxy HTTP 500 — throws VtoError with code VTO_ERROR", async () => {
     global.fetch = jest.fn().mockResolvedValueOnce({
       ok: false,
       status: 500,
+      json: async () => ({ error: "Internal VTO proxy error" }),
     } as unknown as Response);
 
     await expect(
       callVTO(
         "https://example.com/model.jpg",
-        "https://example.com/garment.jpg",
+        "base64garmentdata==",
         "dress",
       ),
     ).rejects.toMatchObject({ code: "VTO_ERROR" });
@@ -202,7 +181,7 @@ describe("callVTO", () => {
     const mockFetch = jest.fn();
     global.fetch = mockFetch;
 
-    const result = await callVTO(null, "https://example.com/garment.jpg", "dress");
+    const result = await callVTO(null, "base64garmentdata==", "dress");
     expect(result).toBe("");
     expect(mockFetch).not.toHaveBeenCalled();
   });

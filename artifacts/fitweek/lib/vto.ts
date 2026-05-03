@@ -1,9 +1,9 @@
 /**
  * Virtual Try-On (VTO) — Issue 6
  *
- * Integrates with the IDM-VTON Gradio Space using the v4+ named-endpoint API:
- *   POST /call/tryon  → { event_id }
- *   GET  /call/tryon/{event_id}  → SSE stream → event: complete → data: [FileData, ...]
+ * Calls the api-server's /api/vto/tryon proxy (which in turn calls IDM-VTON on
+ * HuggingFace Spaces). Routing through the server avoids browser CORS restrictions
+ * and works identically on web and native.
  *
  * Garment priority: dresses/overalls → tops → bottoms → outerwear → shoes
  */
@@ -45,55 +45,19 @@ export function selectHeroGarment(garments: Garment[]): Garment | null {
   return garments[0];
 }
 
-// ── Internal helpers ──────────────────────────────────────────────────────────
+// ── VTO proxy call ────────────────────────────────────────────────────────────
 
-const VTO_SPACE_URL = "https://yisol-idm-vton.hf.space";
 const VTO_TIMEOUT_MS = 120_000;
 
-interface GradioFileData {
-  path: string;
-  url?: string;
-  meta: { _type: string };
-}
-
-function makeFileData(path: string, url?: string): GradioFileData {
-  return { path, ...(url ? { url } : {}), meta: { _type: "gradio.FileData" } };
-}
-
-/** Upload a local file URI to the Gradio Space and return its server-side path. */
-async function uploadToGradio(uri: string, signal?: AbortSignal): Promise<string> {
-  const form = new FormData();
-  // React Native FormData accepts { uri, type, name } as a "file" entry
-  form.append("files", { uri, type: "image/jpeg", name: "image.jpg" } as unknown as Blob);
-
-  const res = await fetch(`${VTO_SPACE_URL}/upload`, {
-    method: "POST",
-    body: form,
-    signal,
-  });
-
-  if (!res.ok) {
-    throw new VtoError("VTO_ERROR", `Gradio upload failed: ${res.status}`);
+function getProxyUrl(): string {
+  // On web, relative paths work; on native we need the full domain
+  if (typeof window !== "undefined") {
+    return "/api/vto/tryon";
   }
-
-  const paths = (await res.json()) as string[];
-  if (!paths?.[0]) throw new VtoError("VTO_ERROR", "No path returned from Gradio upload");
-  return paths[0];
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  return domain ? `https://${domain}/api/vto/tryon` : "http://localhost:8080/api/vto/tryon";
 }
 
-/**
- * For HTTP/HTTPS URIs, pass them directly as FileData (no upload required).
- * For local file:// URIs, upload first and use the returned server path.
- */
-async function resolveFileData(uri: string, signal?: AbortSignal): Promise<GradioFileData> {
-  if (uri.startsWith("http://") || uri.startsWith("https://")) {
-    return makeFileData(uri, uri);
-  }
-  const path = await uploadToGradio(uri, signal);
-  return makeFileData(path);
-}
-
-/** Combine an optional external AbortSignal with the internal timeout signal. */
 function combineSignals(external: AbortSignal | undefined, internal: AbortSignal): AbortSignal {
   if (!external) return internal;
   const mc = new AbortController();
@@ -103,116 +67,47 @@ function combineSignals(external: AbortSignal | undefined, internal: AbortSignal
   return mc.signal;
 }
 
-// ── VTO API call ──────────────────────────────────────────────────────────────
-
 /**
- * Calls the IDM-VTON Gradio Space named endpoint `/tryon`.
+ * Call the server-side VTO proxy.
  *
- * Flow:
- *  1. Resolve image URIs → Gradio FileData (upload local files if needed)
- *  2. POST /call/tryon → { event_id }
- *  3. GET  /call/tryon/{event_id} → SSE stream → parse "event: complete"
+ * @param modelImageUrl   HTTPS URL of the user's model photo (from Supabase storage)
+ * @param garmentBase64   Base64-encoded garment image (from expo-file-system)
+ * @param garmentDescription  Short text description of the garment
+ * @param signal          Optional AbortSignal for cancellation
  *
  * Returns the result image URL.
+ * Returns "" immediately if modelImageUrl is null.
  * Throws VtoError(VTO_TIMEOUT) on timeout/abort.
- * Throws VtoError(VTO_ERROR) on HTTP or parse failure.
- * Returns "" immediately if modelImageUri is null.
+ * Throws VtoError(VTO_ERROR) on any other failure.
  */
 export async function callVTO(
-  modelImageUri: string | null,
-  garmentImageUri: string,
+  modelImageUrl: string | null,
+  garmentBase64: string,
   garmentDescription: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  if (!modelImageUri) return "";
+  if (!modelImageUrl) return "";
 
   const internalController = new AbortController();
   const timer = setTimeout(() => internalController.abort(), VTO_TIMEOUT_MS);
   const combined = combineSignals(signal, internalController.signal);
 
   try {
-    // 1. Resolve images to Gradio FileData
-    const [modelData, garmentData] = await Promise.all([
-      resolveFileData(modelImageUri, combined),
-      resolveFileData(garmentImageUri, combined),
-    ]);
-
-    // 2. Initiate the VTO job
-    const callRes = await fetch(`${VTO_SPACE_URL}/call/tryon`, {
+    const res = await fetch(getProxyUrl(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        data: [
-          { background: modelData, layers: [], composite: null },
-          garmentData,
-          garmentDescription,
-          true, // is_checked — auto-masking
-          true, // is_checked_crop
-          30,   // denoise_steps
-          42,   // seed
-        ],
-      }),
+      body: JSON.stringify({ modelImageUrl, garmentBase64, garmentDescription }),
       signal: combined,
     });
 
-    if (!callRes.ok) {
-      throw new VtoError("VTO_ERROR", `Gradio call returned ${callRes.status}`);
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new VtoError("VTO_ERROR", err.error ?? `Proxy returned ${res.status}`);
     }
 
-    const { event_id } = (await callRes.json()) as { event_id: string };
-    if (!event_id) throw new VtoError("VTO_ERROR", "No event_id returned from Gradio");
-
-    // 3. Stream SSE result
-    const streamRes = await fetch(`${VTO_SPACE_URL}/call/tryon/${event_id}`, {
-      signal: combined,
-    });
-
-    if (!streamRes.ok) {
-      throw new VtoError("VTO_ERROR", `Gradio stream returned ${streamRes.status}`);
-    }
-
-    const reader = streamRes.body?.getReader();
-    if (!reader) throw new VtoError("VTO_ERROR", "No response body from Gradio stream");
-
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      // Process complete lines
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-
-        if (line === "event: complete") {
-          const dataLine = lines[i + 1] ?? "";
-          if (dataLine.startsWith("data: ")) {
-            const data = JSON.parse(dataLine.slice(6)) as Array<{
-              path: string;
-              url?: string;
-            }>;
-            const result = data[0];
-            const url =
-              result?.url ||
-              (result?.path ? `${VTO_SPACE_URL}/file=${result.path}` : undefined);
-            if (!url) throw new VtoError("VTO_ERROR", "No URL in VTO result");
-            return url;
-          }
-        }
-
-        if (line === "event: error") {
-          const dataLine = lines[i + 1] ?? "";
-          throw new VtoError("VTO_ERROR", `Gradio returned an error: ${dataLine}`);
-        }
-      }
-    }
-
-    throw new VtoError("VTO_ERROR", "VTO stream ended without a result");
+    const { resultUrl } = (await res.json()) as { resultUrl?: string };
+    if (!resultUrl) throw new VtoError("VTO_ERROR", "No resultUrl in proxy response");
+    return resultUrl;
   } catch (err) {
     if (err instanceof VtoError) throw err;
     const isAbort =

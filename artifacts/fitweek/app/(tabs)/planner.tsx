@@ -472,6 +472,28 @@ export default function PlannerScreen() {
       return;
     }
 
+    // Read garment image as base64 to send to the server-side VTO proxy
+    let garmentBase64: string;
+    try {
+      if (hero.imageUri.startsWith("http")) {
+        // Remote URL: download then base64-encode
+        const imgRes = await fetch(hero.imageUri);
+        const arrayBuf = await imgRes.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuf);
+        let binary = "";
+        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+        garmentBase64 = btoa(binary);
+      } else {
+        // Local file URI (camera / image picker)
+        garmentBase64 = await FileSystem.readAsStringAsync(hero.imageUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
+    } catch {
+      Alert.alert("Try-on failed", "Could not read garment image.");
+      return;
+    }
+
     const controller = new AbortController();
     vtoControllerRef.current = controller;
     setVtoLoading(true);
@@ -479,7 +501,7 @@ export default function PlannerScreen() {
     try {
       const resultUrl = await callVTO(
         modelImageUrl,
-        hero.imageUri,
+        garmentBase64,
         hero.aiDescription ?? hero.name,
         controller.signal,
       );
