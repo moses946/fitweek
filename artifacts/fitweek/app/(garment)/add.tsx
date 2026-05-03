@@ -124,6 +124,10 @@ export default function AddGarmentScreen() {
         setCategory(classified.category);
         setColor(classified.color);
         setTags(classified.tags);
+        // Pre-fill name with the specific Vision label (e.g. "T-Shirt"), not the broad category
+        if (classified.matchedLabel) {
+          setName(classified.matchedLabel);
+        }
       }
       setStep("review");
     } catch {

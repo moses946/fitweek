@@ -18,6 +18,8 @@ interface ClassifyResult {
   color: string;
   tags: string[];
   confidence: number;
+  /** The specific Vision label that matched the category, e.g. "T-shirt", "Blazer" */
+  matchedLabel: string | null;
 }
 
 // --- Helpers ---
@@ -145,18 +147,21 @@ function pickDominantColor(
 
 function classifyFromLabels(
   labels: Array<{ description: string; score: number }>,
-): { category: GarmentCategory; tags: string[]; confidence: number } {
+): { category: GarmentCategory; tags: string[]; confidence: number; matchedLabel: string | null } {
   const tags: string[] = [];
   let category: GarmentCategory = "other";
   let confidence = 0;
+  let matchedLabel: string | null = null;
 
   for (const { description, score } of labels) {
     const lower = description.toLowerCase();
 
-    // Check for category match
+    // Check for category match — capture the original casing as matchedLabel
     if (category === "other" && LABEL_TO_CATEGORY[lower]) {
       category = LABEL_TO_CATEGORY[lower]!;
       confidence = score;
+      // Capitalise first letter of each word for display (e.g. "t-shirt" → "T-shirt")
+      matchedLabel = description.replace(/\b\w/g, (c) => c.toUpperCase());
     }
 
     // Collect useful tags (clothing-related terms, exclude generic)
@@ -166,7 +171,7 @@ function classifyFromLabels(
     }
   }
 
-  return { category, tags: tags.slice(0, 6), confidence };
+  return { category, tags: tags.slice(0, 6), confidence, matchedLabel };
 }
 
 // --- Route ---
@@ -256,10 +261,10 @@ router.post("/garments/classify", async (req, res) => {
     const colorData =
       response.imagePropertiesAnnotation?.dominantColors?.colors ?? [];
 
-    const { category, tags, confidence } = classifyFromLabels(labels);
+    const { category, tags, confidence, matchedLabel } = classifyFromLabels(labels);
     const color = pickDominantColor(colorData);
 
-    const result: ClassifyResult = { category, color, tags, confidence };
+    const result: ClassifyResult = { category, color, tags, confidence, matchedLabel };
     res.json(result);
   } catch (err) {
     req.log.error({ err }, "Garment classification failed");

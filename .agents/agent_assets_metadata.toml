@@ -6,3 +6,9 @@ id = "1WL6LVTxYxYT6w-A_qMPI"
 uri = "file://fitweek-implementation-plan.md"
 type = "text"
 title = "FitWeek — Implementation Plan v1.1"
+
+[[outputs]]
+id = "oM_Ze3TCp6UE2_yrZ8vrB"
+uri = "file://fitweek-prd-v1.md"
+type = "text"
+title = "FitWeek Sprint 1 PRD"

@@ -23,6 +23,7 @@ export interface ClassifyResponse {
   color: string;
   tags: string[];
   confidence: number;
+  matchedLabel: string | null;
 }
 
 interface GarmentContextValue {

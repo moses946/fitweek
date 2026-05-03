@@ -40,7 +40,8 @@ function AuthGate() {
     } else if (!hasCompletedOnboarding) {
       if (!inOnboarding) router.replace("/(onboarding)/model-photo");
     } else {
-      if (inAuth || inOnboarding) router.replace("/(tabs)");
+      // Authenticated + onboarded users can visit (onboarding) to update model photo
+      if (inAuth) router.replace("/(tabs)");
     }
   }, [session, isLoading, hasCompletedOnboarding, segments, navState?.key]);
 

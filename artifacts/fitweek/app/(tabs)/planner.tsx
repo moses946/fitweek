@@ -31,6 +31,7 @@ import { generateICS, generateShareCard, ICS_MIME_TYPE } from "@/lib/ics";
 import type { DailyForecast } from "@/lib/weather";
 import type { Garment, OutfitSlot } from "@/lib/types";
 import { selectHeroGarment, callVTO, VtoError } from "@/lib/vto";
+import { buildSuggestionDeck } from "@/lib/suggestionFilter";
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -377,7 +378,7 @@ export default function PlannerScreen() {
 
   const { modelImageUrl } = useAuth();
   const { garments } = useGarments();
-  const { slots, clearSlot, markAllWornInSlot, renameSlot, updateSlotVtoImage } = useOutfitSlots();
+  const { slots, clearSlot, markAllWornInSlot, renameSlot, updateSlotVtoImage, bulkWriteDrafts } = useOutfitSlots();
   const {
     forecast,
     usingCache,
@@ -395,6 +396,7 @@ export default function PlannerScreen() {
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [uiMode, setUIMode] = useState<UIMode>("idle");
   const [vtoLoading, setVtoLoading] = useState(false);
+  const [weekSuggesting, setWeekSuggesting] = useState(false);
 
   const vtoControllerRef = useRef<AbortController | null>(null);
 
@@ -414,6 +416,81 @@ export default function PlannerScreen() {
 
   const handlePlanDay = () => {
     router.push({ pathname: "/(swipe)/[date]", params: { date: selectedDate } });
+  };
+
+  const getProxyBase = () => {
+    if (typeof window !== "undefined") return "";
+    const domain = process.env.EXPO_PUBLIC_DOMAIN;
+    return domain ? `https://${domain}` : "http://localhost:8080";
+  };
+
+  const handleSuggestForDay = async () => {
+    const eligibleGarments = buildSuggestionDeck(garments, forecastByDate.get(selectedDate) ?? null);
+    if (!eligibleGarments.length) {
+      Alert.alert("No garments", "Add some clean garments to your closet first.");
+      return;
+    }
+    setWeekSuggesting(true);
+    try {
+      const res = await fetch(`${getProxyBase()}/api/outfit/suggest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dates: [selectedDate],
+          garments,
+          forecasts: forecast ?? [],
+        }),
+      });
+      if (!res.ok) throw new Error("Suggest failed");
+      const { suggestions } = await res.json() as { suggestions: Record<string, string[]> };
+      await bulkWriteDrafts(suggestions);
+      router.push({ pathname: "/(swipe)/[date]", params: { date: selectedDate } });
+    } catch {
+      Alert.alert("Suggestion failed", "Could not generate a suggestion. Try again.");
+    } finally {
+      setWeekSuggesting(false);
+    }
+  };
+
+  const handlePlanWeek = async () => {
+    const unplannedDates = weekDays
+      .map(toISODate)
+      .filter((d) => {
+        const s = slotByDate.get(d);
+        return !s || s.status !== "confirmed";
+      });
+
+    if (!unplannedDates.length) {
+      Alert.alert("All set!", "You have confirmed outfits for every day this week.");
+      return;
+    }
+    if (!garments.filter((g) => g.status === "clean" && !g.deletedAt).length) {
+      Alert.alert("No garments", "Add some clean garments to your closet first.");
+      return;
+    }
+
+    setWeekSuggesting(true);
+    try {
+      const res = await fetch(`${getProxyBase()}/api/outfit/suggest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dates: unplannedDates,
+          garments,
+          forecasts: forecast ?? [],
+        }),
+      });
+      if (!res.ok) throw new Error("Suggest failed");
+      const { suggestions } = await res.json() as { suggestions: Record<string, string[]> };
+      await bulkWriteDrafts(suggestions);
+      // Navigate to the first unplanned day so user can start swiping
+      const firstDate = unplannedDates[0]!;
+      router.push({ pathname: "/(swipe)/[date]", params: { date: firstDate } });
+    } catch {
+      Alert.alert("Suggestion failed", "Could not generate suggestions. Try again.");
+    } finally {
+      setWeekSuggesting(false);
+    }
   };
 
   const handleEditSlot = (slot: OutfitSlot) => {
@@ -611,6 +688,34 @@ export default function PlannerScreen() {
         </View>
       </View>
 
+      {/* Plan my week CTA */}
+      {!showLocationPrompt && uiMode === "idle" && (
+        <Pressable
+          onPress={handlePlanWeek}
+          disabled={weekSuggesting}
+          style={({ pressed }) => [styles.planWeekBtn, { opacity: pressed || weekSuggesting ? 0.7 : 1 }]}
+        >
+          <LinearGradient
+            colors={brandColors.gradientPrimary}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.planWeekGradient}
+          >
+            {weekSuggesting ? (
+              <>
+                <ActivityIndicator size="small" color="#FFF" />
+                <Text style={styles.planWeekLabel}>Suggesting outfits…</Text>
+              </>
+            ) : (
+              <>
+                <Feather name="zap" size={14} color="#FFF" />
+                <Text style={styles.planWeekLabel}>Plan my week</Text>
+              </>
+            )}
+          </LinearGradient>
+        </Pressable>
+      )}
+
       {usingCache && <CachedBanner />}
       {weatherUnavailable && !showLocationPrompt && <UnavailableBanner />}
       {isLoading && (
@@ -714,6 +819,26 @@ export default function PlannerScreen() {
                   </Text>
                 </LinearGradient>
               </Pressable>
+
+              {!selectedSlot?.garmentIds.length && (
+                <Pressable
+                  onPress={handleSuggestForDay}
+                  disabled={weekSuggesting}
+                  style={[
+                    styles.suggestDayBtn,
+                    { borderColor: colors.primary, opacity: weekSuggesting ? 0.6 : 1 },
+                  ]}
+                >
+                  {weekSuggesting ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Feather name="zap" size={14} color={colors.primary} />
+                  )}
+                  <Text style={[styles.suggestDayText, { color: colors.primary }]}>
+                    Suggest outfit
+                  </Text>
+                </Pressable>
+              )}
             </View>
           </>
         )}
@@ -872,6 +997,31 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   planBtnText: { color: "#FFFFFF", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  // Suggest outfit (single-day)
+  suggestDayBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    gap: 7,
+    marginTop: 2,
+  },
+  suggestDayText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  // Plan my week banner
+  planWeekBtn: { marginHorizontal: 20, marginBottom: 8 },
+  planWeekGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 11,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 7,
+  },
+  planWeekLabel: { color: "#FFF", fontSize: 14, fontFamily: "Inter_600SemiBold" },
   // Location prompt
   locationCard: { borderRadius: 16, borderWidth: 1, padding: 24, gap: 12, alignItems: "center" },
   locationTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },

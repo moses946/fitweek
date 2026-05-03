@@ -39,6 +39,8 @@ interface OutfitSlotContextValue {
   updateSlotVtoImage: (slotId: string, vtoImageUrl: string) => Promise<void>;
   /** IDs of garments locked into confirmed slots (excluding a given date) */
   getConfirmedGarmentIds: (excludeDate?: string) => Set<string>;
+  /** Write draft slots for multiple dates at once (for weekly AI suggest) */
+  bulkWriteDrafts: (suggestions: Record<string, string[]>) => Promise<void>;
 }
 
 const OutfitSlotContext = createContext<OutfitSlotContextValue | null>(null);
@@ -140,6 +142,32 @@ export function OutfitSlotProvider({ children }: { children: React.ReactNode }) 
     [slots],
   );
 
+  const bulkWriteDrafts = useCallback(
+    async (suggestions: Record<string, string[]>) => {
+      let next = [...slots];
+      for (const [date, garmentIds] of Object.entries(suggestions)) {
+        if (!garmentIds.length) continue;
+        // Don't overwrite already-confirmed slots
+        const existing = next.find((s) => s.date === date);
+        if (existing?.status === "confirmed") continue;
+        // Replace or create draft
+        const draft: OutfitSlot = {
+          id: existing?.id ?? (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)),
+          date,
+          garmentIds,
+          status: "draft",
+          name: null,
+          createdAt: existing?.createdAt ?? new Date().toISOString(),
+        };
+        next = existing
+          ? next.map((s) => (s.date === date ? draft : s))
+          : [draft, ...next];
+      }
+      await persist(next);
+    },
+    [slots, persist],
+  );
+
   return (
     <OutfitSlotContext.Provider
       value={{
@@ -155,6 +183,7 @@ export function OutfitSlotProvider({ children }: { children: React.ReactNode }) 
         markAllWornInSlot,
         updateSlotVtoImage,
         getConfirmedGarmentIds: getConfirmedIds,
+        bulkWriteDrafts,
       }}
     >
       {children}
