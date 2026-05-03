@@ -24,67 +24,113 @@ interface ClassifyResult {
 
 // --- Helpers ---
 
+/**
+ * Exact-match lookup for Vision label → garment category.
+ * The classifier also does word-by-word partial matching as a fallback.
+ */
 const LABEL_TO_CATEGORY: Record<string, GarmentCategory> = {
-  "t-shirt": "tops",
-  tshirt: "tops",
-  shirt: "tops",
-  blouse: "tops",
-  top: "tops",
-  jersey: "tops",
-  sweater: "tops",
-  hoodie: "tops",
-  "tank top": "tops",
-  polo: "tops",
-  cardigan: "tops",
-  jumper: "tops",
-  vest: "tops",
-  jacket: "outerwear",
-  coat: "outerwear",
-  blazer: "outerwear",
-  parka: "outerwear",
-  puffer: "outerwear",
-  anorak: "outerwear",
-  raincoat: "outerwear",
-  overcoat: "outerwear",
-  dress: "dresses",
-  gown: "dresses",
-  sundress: "dresses",
-  overalls: "dresses",
-  jumpsuit: "dresses",
-  romper: "dresses",
-  skirt: "bottoms",
-  trousers: "bottoms",
-  jeans: "bottoms",
-  pants: "bottoms",
-  shorts: "bottoms",
-  leggings: "bottoms",
-  chinos: "bottoms",
-  joggers: "bottoms",
-  "cargo pants": "bottoms",
-  shoe: "shoes",
-  shoes: "shoes",
-  sneaker: "shoes",
-  sneakers: "shoes",
-  boot: "shoes",
-  boots: "shoes",
-  heel: "shoes",
-  heels: "shoes",
-  sandal: "shoes",
-  sandals: "shoes",
-  loafer: "shoes",
-  loafers: "shoes",
-  trainer: "shoes",
-  trainers: "shoes",
-  bag: "accessories",
-  handbag: "accessories",
-  scarf: "accessories",
-  hat: "accessories",
-  cap: "accessories",
-  belt: "accessories",
-  gloves: "accessories",
-  sunglasses: "accessories",
-  watch: "accessories",
+  // Tops
+  "t-shirt": "tops", tshirt: "tops", "t shirt": "tops", shirt: "tops",
+  blouse: "tops", top: "tops", jersey: "tops", sweater: "tops",
+  hoodie: "tops", "tank top": "tops", "tank tops": "tops", polo: "tops",
+  cardigan: "tops", jumper: "tops", vest: "tops", sweatshirt: "tops",
+  turtleneck: "tops", "crew neck": "tops", crewneck: "tops",
+  "long sleeve": "tops", "long-sleeve": "tops", "short sleeve": "tops",
+  "polo shirt": "tops", "dress shirt": "tops", "casual shirt": "tops",
+  "button down": "tops", "button-down": "tops", flannel: "tops",
+  henley: "tops", camisole: "tops", crop: "tops", "crop top": "tops",
+  bralette: "tops", tube: "tops", halter: "tops",
+
+  // Outerwear
+  jacket: "outerwear", coat: "outerwear", blazer: "outerwear",
+  parka: "outerwear", puffer: "outerwear", anorak: "outerwear",
+  raincoat: "outerwear", overcoat: "outerwear", windbreaker: "outerwear",
+  trench: "outerwear", "trench coat": "outerwear", "sport coat": "outerwear",
+  "sports coat": "outerwear", "track jacket": "outerwear", fleece: "outerwear",
+  "leather jacket": "outerwear", denim: "outerwear",
+
+  // Dresses
+  dress: "dresses", gown: "dresses", sundress: "dresses",
+  overalls: "dresses", jumpsuit: "dresses", romper: "dresses",
+  "maxi dress": "dresses", "midi dress": "dresses", "mini dress": "dresses",
+  "bodycon": "dresses", "wrap dress": "dresses",
+
+  // Bottoms
+  skirt: "bottoms", trousers: "bottoms", jeans: "bottoms",
+  pants: "bottoms", shorts: "bottoms", leggings: "bottoms",
+  chinos: "bottoms", joggers: "bottoms", "cargo pants": "bottoms",
+  sweatpants: "bottoms", "track pants": "bottoms", culottes: "bottoms",
+  slacks: "bottoms", khakis: "bottoms", "athletic shorts": "bottoms",
+  "board shorts": "bottoms", "bike shorts": "bottoms",
+  "dress pants": "bottoms", "skinny jeans": "bottoms",
+
+  // Shoes
+  shoe: "shoes", shoes: "shoes", sneaker: "shoes", sneakers: "shoes",
+  boot: "shoes", boots: "shoes", heel: "shoes", heels: "shoes",
+  sandal: "shoes", sandals: "shoes", loafer: "shoes", loafers: "shoes",
+  trainer: "shoes", trainers: "shoes", "running shoes": "shoes",
+  "running shoe": "shoes", "athletic shoes": "shoes", "high heels": "shoes",
+  "ankle boots": "shoes", "knee-high boots": "shoes", mule: "shoes",
+  mules: "shoes", "flat shoes": "shoes", pump: "shoes", pumps: "shoes",
+  slipper: "shoes", slippers: "shoes", clog: "shoes", clogs: "shoes",
+  oxford: "shoes", oxfords: "shoes", derby: "shoes",
+
+  // Accessories
+  bag: "accessories", handbag: "accessories", scarf: "accessories",
+  hat: "accessories", cap: "accessories", belt: "accessories",
+  gloves: "accessories", sunglasses: "accessories", watch: "accessories",
+  backpack: "accessories", "tote bag": "accessories", purse: "accessories",
+  wallet: "accessories", necklace: "accessories", bracelet: "accessories",
+  earrings: "accessories", ring: "accessories", tie: "accessories",
+  "bow tie": "accessories", beanie: "accessories", beret: "accessories",
+  visor: "accessories",
 };
+
+/**
+ * Attempt to match a single Vision label to a garment category.
+ * Strategy (in order):
+ *   1. Exact lowercase match
+ *   2. Word-by-word match (e.g. "Active Shirt" → word "shirt" → tops)
+ *   3. Substring match on short well-known keywords
+ */
+function matchLabelToCategory(
+  description: string,
+): { category: GarmentCategory; matchedLabel: string } | null {
+  const lower = description.toLowerCase();
+
+  // 1. Exact match
+  if (LABEL_TO_CATEGORY[lower]) {
+    return {
+      category: LABEL_TO_CATEGORY[lower]!,
+      matchedLabel: description.replace(/\b\w/g, (c) => c.toUpperCase()),
+    };
+  }
+
+  // 2. Word-by-word: split label into individual words and check each
+  const words = lower.split(/[\s\-_/]+/);
+  for (const word of words) {
+    if (word.length < 3) continue;
+    if (LABEL_TO_CATEGORY[word]) {
+      return {
+        category: LABEL_TO_CATEGORY[word]!,
+        matchedLabel: description.replace(/\b\w/g, (c) => c.toUpperCase()),
+      };
+    }
+  }
+
+  // 3. Substring match: check if the label *contains* a known keyword
+  //    Only for unambiguous, longer keywords (≥5 chars) to avoid false positives
+  for (const [key, cat] of Object.entries(LABEL_TO_CATEGORY)) {
+    if (key.length >= 5 && lower.includes(key)) {
+      return {
+        category: cat,
+        matchedLabel: description.replace(/\b\w/g, (c) => c.toUpperCase()),
+      };
+    }
+  }
+
+  return null;
+}
 
 function rgbToHsl(r: number, g: number, b: number) {
   const rn = r / 255;
@@ -133,14 +179,12 @@ function pickDominantColor(
   colors: Array<{ color: { red: number; green: number; blue: number }; pixelFraction: number }>,
 ): string {
   if (!colors.length) return "Unknown";
-  // Sort by pixel fraction (coverage) and pick the most prominent non-white/near-white color
   const sorted = [...colors].sort((a, b) => b.pixelFraction - a.pixelFraction);
   for (const c of sorted) {
     const { red: r = 0, green: g = 0, blue: b = 0 } = c.color;
     const name = colorName(r, g, b);
     if (name !== "White" && name !== "Light Gray") return name;
   }
-  // Fall back to the dominant color even if it's white
   const { red: r = 0, green: g = 0, blue: b = 0 } = sorted[0]!.color;
   return colorName(r, g, b);
 }
@@ -156,17 +200,22 @@ function classifyFromLabels(
   for (const { description, score } of labels) {
     const lower = description.toLowerCase();
 
-    // Check for category match — capture the original casing as matchedLabel
-    if (category === "other" && LABEL_TO_CATEGORY[lower]) {
-      category = LABEL_TO_CATEGORY[lower]!;
-      confidence = score;
-      // Capitalise first letter of each word for display (e.g. "t-shirt" → "T-shirt")
-      matchedLabel = description.replace(/\b\w/g, (c) => c.toUpperCase());
+    // Try to match this label to a category
+    if (category === "other") {
+      const match = matchLabelToCategory(description);
+      if (match) {
+        category = match.category;
+        confidence = score;
+        matchedLabel = match.matchedLabel;
+      }
     }
 
-    // Collect useful tags (clothing-related terms, exclude generic)
-    const skip = ["clothing", "fashion", "wear", "apparel", "textile", "fabric"];
-    if (!skip.includes(lower) && score > 0.7) {
+    // Collect useful tags (clothing-related terms, exclude generic noise)
+    const skip = new Set([
+      "clothing", "fashion", "wear", "apparel", "textile", "fabric",
+      "sleeve", "collar", "pattern", "textile", "material", "active shirt",
+    ]);
+    if (!skip.has(lower) && score > 0.7) {
       tags.push(description.toLowerCase());
     }
   }
@@ -182,8 +231,6 @@ function classifyFromLabels(
  * Classifies a garment photo using Google Cloud Vision.
  * Accepts either a public imageUrl or raw imageBase64 (without data: prefix).
  * Returns category, dominant color, tags, and confidence.
- *
- * Free tier: 1,000 units/month.
  */
 router.post("/garments/classify", async (req, res) => {
   const apiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
@@ -221,7 +268,7 @@ router.post("/garments/classify", async (req, res) => {
             {
               image: imageSource,
               features: [
-                { type: "LABEL_DETECTION", maxResults: 25 },
+                { type: "LABEL_DETECTION", maxResults: 30 },
                 { type: "IMAGE_PROPERTIES" },
               ],
             },
@@ -263,6 +310,11 @@ router.post("/garments/classify", async (req, res) => {
 
     const { category, tags, confidence, matchedLabel } = classifyFromLabels(labels);
     const color = pickDominantColor(colorData);
+
+    req.log.info(
+      { category, color, confidence, matchedLabel, labelCount: labels.length },
+      "Garment classified",
+    );
 
     const result: ClassifyResult = { category, color, tags, confidence, matchedLabel };
     res.json(result);

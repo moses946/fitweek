@@ -20,7 +20,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { WeatherBadge, WeatherUnavailableBadge } from "@/components/WeatherBadge";
 import brandColors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGarments } from "@/contexts/GarmentContext";
@@ -49,6 +48,15 @@ function getWeekDays(from: Date = new Date()): Date[] {
 }
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+const WEATHER_EMOJI: Record<string, string> = {
+  clear: "☀️",
+  cloudy: "⛅",
+  rainy: "🌧️",
+  snowy: "❄️",
+  windy: "💨",
+  thunderstorm: "⛈️",
+};
 
 function toISODate(d: Date): string {
   return d.toISOString().split("T")[0]!;
@@ -105,6 +113,8 @@ interface DayCellProps {
 function DayCell({ date, label, isToday, isSelected, forecast, slot, onPress }: DayCellProps) {
   const colors = useColors();
   const hasOutfit = slot?.status === "confirmed";
+  const weatherEmoji = forecast ? (WEATHER_EMOJI[forecast.condition] ?? "🌡️") : "–";
+  const weatherTemp = forecast ? `${forecast.tempMax}°` : "";
 
   return (
     <Pressable
@@ -124,13 +134,12 @@ function DayCell({ date, label, isToday, isSelected, forecast, slot, onPress }: 
       <Text style={[styles.dayDate, { color: isSelected ? "#FFFFFF" : colors.foreground }]}>
         {date.getDate()}
       </Text>
-      <View style={styles.weatherRow}>
-        {forecast ? (
-          <WeatherBadge forecast={forecast} size="compact" />
-        ) : (
-          <WeatherUnavailableBadge />
-        )}
-      </View>
+      <Text style={styles.weatherEmoji}>{weatherEmoji}</Text>
+      {weatherTemp ? (
+        <Text style={[styles.weatherTemp, { color: isSelected ? "rgba(255,255,255,0.8)" : colors.mutedForeground }]}>
+          {weatherTemp}
+        </Text>
+      ) : null}
       {hasOutfit && (
         <View style={[styles.outfitDot, { backgroundColor: isSelected ? "#FFFFFF" : colors.primary }]} />
       )}
@@ -894,18 +903,19 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: 13, fontFamily: "Poppins_400Regular" },
   dayStrip: { paddingHorizontal: 16, paddingBottom: 16, gap: 8, flexDirection: "row" },
   dayCell: {
-    width: 64,
+    width: 52,
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
     borderRadius: 14,
     borderWidth: 1,
-    gap: 4,
+    gap: 2,
   },
-  dayLabel: { fontSize: 11, fontFamily: "Poppins_600SemiBold" },
-  dayDate: { fontSize: 18, fontFamily: "Poppins_700Bold" },
-  weatherRow: { marginTop: 2 },
-  outfitDot: { width: 6, height: 6, borderRadius: 3, marginTop: 2 },
+  dayLabel: { fontSize: 10, fontFamily: "Poppins_600SemiBold" },
+  dayDate: { fontSize: 15, fontFamily: "Poppins_700Bold" },
+  weatherEmoji: { fontSize: 14, lineHeight: 18 },
+  weatherTemp: { fontSize: 10, fontFamily: "Poppins_500Medium" },
+  outfitDot: { width: 5, height: 5, borderRadius: 3, marginTop: 1 },
   content: { flex: 1 },
   contentInner: { paddingHorizontal: 20, paddingBottom: 40 },
   sectionLabel: { fontSize: 13, fontFamily: "Poppins_500Medium", marginBottom: 12 },

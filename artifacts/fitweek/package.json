@@ -73,6 +73,7 @@
   },
   "dependencies": {
     "@expo-google-fonts/poppins": "^0.4.1",
+    "@react-native-community/datetimepicker": "^9.1.0",
     "@supabase/supabase-js": "^2.105.1",
     "expo-file-system": "^19.0.22",
     "expo-notifications": "^0.32.17",

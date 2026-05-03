@@ -16,6 +16,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import brandColors from "@/constants/colors";
@@ -226,6 +227,24 @@ function NotificationsModal({ visible, onClose }: { visible: boolean; onClose: (
   );
 }
 
+function parseDateString(s: string | null): Date {
+  if (!s) return new Date(1990, 0, 1);
+  // Try ISO string first
+  const iso = new Date(s);
+  if (!isNaN(iso.getTime())) return iso;
+  // Try "DD Month YYYY" e.g. "15 March 1995"
+  const parts = s.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/);
+  if (parts) {
+    const parsed = new Date(`${parts[2]} ${parts[1]}, ${parts[3]}`);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+  return new Date(1990, 0, 1);
+}
+
+function formatBirthdate(d: Date): string {
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+}
+
 function BirthdayModal({
   visible,
   current,
@@ -238,18 +257,23 @@ function BirthdayModal({
   onSave: (value: string) => void;
 }) {
   const colors = useColors();
-  const [input, setInput] = useState(current ?? "");
+  const [selectedDate, setSelectedDate] = useState<Date>(() => parseDateString(current));
 
   useEffect(() => {
-    if (visible) setInput(current ?? "");
+    if (visible) setSelectedDate(parseDateString(current));
   }, [visible, current]);
 
+  const handleChange = (_: DateTimePickerEvent, date?: Date) => {
+    if (date) setSelectedDate(date);
+  };
+
   const handleSave = () => {
-    const trimmed = input.trim();
-    if (!trimmed) return;
-    onSave(trimmed);
+    onSave(formatBirthdate(selectedDate));
     onClose();
   };
+
+  const maxDate = new Date();
+  maxDate.setFullYear(maxDate.getFullYear() - 5);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -260,16 +284,33 @@ function BirthdayModal({
         <Text style={[styles.sheetBody, { color: colors.mutedForeground }]}>
           Google doesn't share your birthdate — enter it here so FitWeek can personalise seasonal suggestions.
         </Text>
-        <TextInput
-          style={[styles.cityInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-          placeholder="e.g. 15 March 1995"
-          placeholderTextColor={colors.mutedForeground}
-          value={input}
-          onChangeText={setInput}
-          onSubmitEditing={handleSave}
-          returnKeyType="done"
-          autoFocus
-        />
+
+        {Platform.OS === "web" ? (
+          <TextInput
+            style={[styles.cityInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+            placeholder="e.g. 15 March 1995"
+            placeholderTextColor={colors.mutedForeground}
+            value={formatBirthdate(selectedDate)}
+            onChangeText={(text) => {
+              const d = parseDateString(text);
+              if (!isNaN(d.getTime())) setSelectedDate(d);
+            }}
+            returnKeyType="done"
+          />
+        ) : (
+          <DateTimePicker
+            value={selectedDate}
+            mode="date"
+            display="spinner"
+            onChange={handleChange}
+            maximumDate={maxDate}
+            minimumDate={new Date(1900, 0, 1)}
+            textColor={colors.foreground}
+            themeVariant="light"
+            style={styles.datePicker}
+          />
+        )}
+
         <View style={styles.sheetActions}>
           <Pressable onPress={handleSave} style={{ flex: 1 }}>
             <LinearGradient
@@ -535,4 +576,5 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   sheetCloseBtnLabel: { fontSize: 14, fontFamily: "Poppins_600SemiBold" },
+  datePicker: { width: "100%" as const, height: 200 },
 });
