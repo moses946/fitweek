@@ -44,7 +44,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [modelImageUrl, setModelImageUrl] = useState<string | null>(null);
 
-  // Load onboarding + model URL for a given user ID from AsyncStorage.
+  // Load onboarding + model URL for a given user ID.
+  // Checks AsyncStorage first; on login also fetches the model URL from Supabase
+  // so it works on new devices where the local cache is empty.
   const loadUserData = async (userId: string | undefined) => {
     try {
       const [onboarded, storedUrl] = await Promise.all([
@@ -52,7 +54,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         AsyncStorage.getItem(modelUrlKey(userId)),
       ]);
       setHasCompletedOnboarding(onboarded === "true");
-      setModelImageUrl(storedUrl);
+
+      if (storedUrl) {
+        // Already cached locally — use it immediately.
+        setModelImageUrl(storedUrl);
+      } else if (userId && isSupabaseConfigured) {
+        // No local cache (e.g. new device) — fetch from Supabase.
+        try {
+          const { data } = await supabase
+            .from("users")
+            .select("model_image_url")
+            .eq("id", userId)
+            .single();
+          const remoteUrl: string | null = data?.model_image_url ?? null;
+          if (remoteUrl) {
+            await AsyncStorage.setItem(modelUrlKey(userId), remoteUrl);
+            setModelImageUrl(remoteUrl);
+          }
+        } catch {
+          // Supabase fetch failed — model URL stays null, user can re-upload.
+        }
+      }
     } catch {
       // AsyncStorage failure — safe to ignore
     }
