@@ -10,8 +10,18 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 WebBrowser.maybeCompleteAuthSession();
 
-const ONBOARDING_KEY = "@fitweek/onboarding_complete";
-const MODEL_URL_KEY = "@fitweek/model_image_url";
+// Keys are per-user so a new account on the same device starts fresh.
+// Falls back to a generic key when there is no user ID (e.g. Supabase not configured).
+function onboardingKey(userId: string | undefined) {
+  return userId
+    ? `@fitweek/onboarding_complete/${userId}`
+    : "@fitweek/onboarding_complete";
+}
+function modelUrlKey(userId: string | undefined) {
+  return userId
+    ? `@fitweek/model_image_url/${userId}`
+    : "@fitweek/model_image_url";
+}
 
 export interface AuthContextValue {
   session: Session | null;
@@ -34,34 +44,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [modelImageUrl, setModelImageUrl] = useState<string | null>(null);
 
+  // Load onboarding + model URL for a given user ID from AsyncStorage.
+  const loadUserData = async (userId: string | undefined) => {
+    try {
+      const [onboarded, storedUrl] = await Promise.all([
+        AsyncStorage.getItem(onboardingKey(userId)),
+        AsyncStorage.getItem(modelUrlKey(userId)),
+      ]);
+      setHasCompletedOnboarding(onboarded === "true");
+      setModelImageUrl(storedUrl);
+    } catch {
+      // AsyncStorage failure — safe to ignore
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
 
     const init = async () => {
+      let userId: string | undefined;
+
       try {
         const { data } = await supabase.auth.getSession();
         if (mounted) {
           setSession(data.session);
           setUser(data.session?.user ?? null);
+          userId = data.session?.user?.id;
         }
       } catch {
         // Supabase not configured yet — session stays null
       }
 
-      try {
-        const [onboarded, storedUrl] = await Promise.all([
-          AsyncStorage.getItem(ONBOARDING_KEY),
-          AsyncStorage.getItem(MODEL_URL_KEY),
-        ]);
-        if (mounted) {
-          setHasCompletedOnboarding(onboarded === "true");
-          setModelImageUrl(storedUrl);
-        }
-      } catch {
-        // AsyncStorage failure — safe to ignore
+      if (mounted) {
+        await loadUserData(userId);
+        setIsLoading(false);
       }
-
-      if (mounted) setIsLoading(false);
     };
 
     init();
@@ -69,10 +86,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      if (mounted) {
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-      }
+      if (!mounted) return;
+      setSession(newSession);
+      setUser(newSession?.user ?? null);
+      // Reload per-user data whenever the account changes (sign-in / sign-out / token refresh).
+      loadUserData(newSession?.user?.id);
     });
 
     return () => {
@@ -129,23 +147,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    const currentUserId = user?.id;
+
     try {
       await supabase.auth.signOut();
     } catch {
       // Ignore signOut errors
     }
-    // Keep ONBOARDING_KEY so returning users skip onboarding on next login.
-    // Only clear the model URL so stale Supabase storage links don't linger.
-    await AsyncStorage.removeItem(MODEL_URL_KEY);
+
+    // Clear this user's model URL (can become stale after session ends).
+    // Onboarding flag is kept — if the same account signs in again they skip onboarding.
+    // If a brand-new account signs in, their own key won't exist → onboarding shows.
+    if (currentUserId) {
+      await AsyncStorage.removeItem(modelUrlKey(currentUserId));
+    }
+
     setModelImageUrl(null);
+    setHasCompletedOnboarding(false);
   };
 
   const completeOnboarding = async (url: string | null) => {
-    await AsyncStorage.setItem(ONBOARDING_KEY, "true");
+    const userId = user?.id;
+
+    await AsyncStorage.setItem(onboardingKey(userId), "true");
     setHasCompletedOnboarding(true);
 
     if (url) {
-      await AsyncStorage.setItem(MODEL_URL_KEY, url);
+      await AsyncStorage.setItem(modelUrlKey(userId), url);
       setModelImageUrl(url);
     }
 
