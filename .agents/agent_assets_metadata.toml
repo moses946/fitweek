@@ -12,3 +12,9 @@ id = "oM_Ze3TCp6UE2_yrZ8vrB"
 uri = "file://fitweek-prd-v1.md"
 type = "text"
 title = "FitWeek Sprint 1 PRD"
+
+[[outputs]]
+id = "ulYspaux9M72eTHuaacbM"
+uri = "file://fitweek-redesign-brief.md"
+type = "text"
+title = "FitWeek Full Redesign Brief"
