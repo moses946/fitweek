@@ -1,5 +1,6 @@
 import { AntDesign, Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -12,13 +13,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { GradientButton } from "@/components/GradientButton";
 import { useAuth } from "@/contexts/AuthContext";
-import { useColors } from "@/hooks/useColors";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import colors from "@/constants/colors";
 
 export default function SignInScreen() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
   const { signIn } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
@@ -51,25 +50,22 @@ export default function SignInScreen() {
   ];
 
   return (
-    <View
+    <LinearGradient
+      colors={colors.gradientPrimary}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
       style={[
         styles.container,
         {
-          backgroundColor: colors.background,
           paddingTop: Platform.OS === "web" ? 67 : insets.top,
           paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 24,
         },
       ]}
     >
       {!isSupabaseConfigured && (
-        <View
-          style={[
-            styles.banner,
-            { backgroundColor: colors.primary + "18", borderColor: colors.border },
-          ]}
-        >
-          <Feather name="alert-circle" size={13} color={colors.primary} />
-          <Text style={[styles.bannerText, { color: colors.foreground }]}>
+        <View style={styles.banner}>
+          <Feather name="alert-circle" size={13} color="rgba(255,255,255,0.8)" />
+          <Text style={styles.bannerText}>
             Add Supabase credentials to .env to enable sign-in
           </Text>
         </View>
@@ -82,59 +78,51 @@ export default function SignInScreen() {
             source={require("@/assets/images/Logo2.png")}
             style={styles.logoImage}
             contentFit="contain"
+            tintColor="#FFFFFF"
           />
-          <Text style={[styles.tagline, { color: colors.mutedForeground }]}>
-            Your wardrobe. Planned.
-          </Text>
+          <Text style={styles.tagline}>Your wardrobe. Planned.</Text>
         </View>
 
         {/* Feature cards */}
         <View style={styles.featureRow}>
           {FEATURES.map(({ icon, label }) => (
-            <View
-              key={label}
-              style={[
-                styles.featureCard,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
-              <Feather name={icon} size={22} color={colors.accent} />
-              <Text style={[styles.featureLabel, { color: colors.mutedForeground }]}>
-                {label}
-              </Text>
+            <View key={label} style={styles.featureCard}>
+              <Feather name={icon} size={22} color="#FFFFFF" />
+              <Text style={styles.featureLabel}>{label}</Text>
             </View>
           ))}
         </View>
 
-        <Text style={[styles.pitch, { color: colors.mutedForeground }]}>
+        <Text style={styles.pitch}>
           {"Only shows what's actually "}
-          <Text style={{ color: colors.statusClean, fontFamily: "Inter_600SemiBold" }}>
-            clean
-          </Text>
+          <Text style={{ fontFamily: "Poppins_600SemiBold" }}>clean</Text>
           {" and right for the "}
-          <Text style={{ color: colors.accent, fontFamily: "Inter_600SemiBold" }}>
-            weather
-          </Text>
-          .
+          <Text style={{ fontFamily: "Poppins_600SemiBold" }}>weather</Text>.
         </Text>
       </View>
 
       {/* CTA */}
       <View style={styles.bottom}>
-        <GradientButton
+        <Pressable
           testID="google-sign-in-button"
           onPress={handleGoogleSignIn}
-          isLoading={isLoading}
-          label="Continue with Google"
-          leftElement={
-            !isLoading && <AntDesign name="google" size={18} color="#FFFFFF" />
-          }
-        />
-        <Text style={[styles.legal, { color: colors.mutedForeground }]}>
+          disabled={isLoading}
+          style={({ pressed }) => [styles.ctaButton, { opacity: pressed ? 0.9 : 1 }]}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#1A1F36" />
+          ) : (
+            <View style={styles.ctaInner}>
+              <AntDesign name="google" size={18} color="#1A1F36" />
+              <Text style={styles.ctaLabel}>Continue with Google</Text>
+            </View>
+          )}
+        </Pressable>
+        <Text style={styles.legal}>
           By continuing you agree to our Terms of Service and Privacy Policy.
         </Text>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -149,9 +137,16 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 10,
     borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+    backgroundColor: "rgba(255,255,255,0.15)",
     gap: 8,
   },
-  bannerText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
+  bannerText: {
+    fontSize: 12,
+    fontFamily: "Poppins_400Regular",
+    color: "rgba(255,255,255,0.9)",
+    flex: 1,
+  },
   content: {
     flex: 1,
     alignItems: "center",
@@ -166,7 +161,8 @@ const styles = StyleSheet.create({
   },
   tagline: {
     fontSize: 16,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Poppins_400Regular",
+    color: "rgba(255,255,255,0.85)",
     letterSpacing: 0.2,
   },
   featureRow: { flexDirection: "row", gap: 12 },
@@ -176,19 +172,44 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     borderRadius: 16,
     borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+    backgroundColor: "rgba(255,255,255,0.15)",
     gap: 8,
   },
-  featureLabel: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  featureLabel: {
+    fontSize: 11,
+    fontFamily: "Poppins_500Medium",
+    color: "rgba(255,255,255,0.9)",
+  },
   pitch: {
     fontSize: 15,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Poppins_400Regular",
+    color: "rgba(255,255,255,0.85)",
     textAlign: "center",
     lineHeight: 22,
   },
   bottom: { paddingHorizontal: 24, gap: 16 },
+  ctaButton: {
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ctaInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  ctaLabel: {
+    fontSize: 14,
+    fontFamily: "Poppins_600SemiBold",
+    color: "#1A1F36",
+  },
   legal: {
     fontSize: 12,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Poppins_400Regular",
+    color: "rgba(255,255,255,0.65)",
     textAlign: "center",
     lineHeight: 17,
   },

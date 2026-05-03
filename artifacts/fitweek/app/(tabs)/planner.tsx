@@ -857,10 +857,10 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 12,
   },
-  title: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  title: { fontSize: 28, fontFamily: "Poppins_700Bold", letterSpacing: -0.5 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 12 },
   cityChip: { flexDirection: "row", alignItems: "center", gap: 4 },
-  cityLabel: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  cityLabel: { fontSize: 12, fontFamily: "Poppins_400Regular" },
   exportBtn: { padding: 4 },
   banner: {
     flexDirection: "row",
@@ -883,7 +883,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 8,
   },
-  bannerText: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  bannerText: { fontSize: 12, fontFamily: "Poppins_400Regular" },
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -891,7 +891,7 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     gap: 8,
   },
-  loadingText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  loadingText: { fontSize: 13, fontFamily: "Poppins_400Regular" },
   dayStrip: { paddingHorizontal: 16, paddingBottom: 16, gap: 8, flexDirection: "row" },
   dayCell: {
     width: 64,
@@ -902,13 +902,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 4,
   },
-  dayLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
-  dayDate: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  dayLabel: { fontSize: 11, fontFamily: "Poppins_600SemiBold" },
+  dayDate: { fontSize: 18, fontFamily: "Poppins_700Bold" },
   weatherRow: { marginTop: 2 },
   outfitDot: { width: 6, height: 6, borderRadius: 3, marginTop: 2 },
   content: { flex: 1 },
   contentInner: { paddingHorizontal: 20, paddingBottom: 40 },
-  sectionLabel: { fontSize: 13, fontFamily: "Inter_500Medium", marginBottom: 12 },
+  sectionLabel: { fontSize: 13, fontFamily: "Poppins_500Medium", marginBottom: 12 },
   // Confirmed outfit card
   outfitCard: {
     borderRadius: 16,
@@ -930,12 +930,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
   },
-  vtoRegenerateLabel: { color: "#FFFFFF", fontSize: 11, fontFamily: "Inter_500Medium" },
+  vtoRegenerateLabel: { color: "#FFFFFF", fontSize: 11, fontFamily: "Poppins_500Medium" },
   outfitNameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  outfitName: { fontSize: 17, fontFamily: "Inter_600SemiBold", flex: 1 },
+  outfitName: { fontSize: 17, fontFamily: "Poppins_600SemiBold", flex: 1 },
   outfitThumbnails: { gap: 8, flexDirection: "row" },
   outfitThumb: { width: 72, height: 72, borderRadius: 10 },
-  emptyThumbText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  emptyThumbText: { fontSize: 13, fontFamily: "Poppins_400Regular" },
   outfitActions: { flexDirection: "row", gap: 8 },
   actionBtn: {
     flex: 1,
@@ -947,7 +947,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
   },
-  actionText: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  actionText: { fontSize: 12, fontFamily: "Poppins_500Medium" },
   // VTO overlay
   vtoOverlay: {
     position: "absolute",
@@ -971,8 +971,8 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
-  vtoOverlayTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", textAlign: "center" },
-  vtoOverlayBody: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+  vtoOverlayTitle: { fontSize: 17, fontFamily: "Poppins_600SemiBold", textAlign: "center" },
+  vtoOverlayBody: { fontSize: 14, fontFamily: "Poppins_400Regular", textAlign: "center", lineHeight: 20 },
   vtoCancelBtn: {
     marginTop: 4,
     paddingHorizontal: 32,
@@ -980,12 +980,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  vtoCancelLabel: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  vtoCancelLabel: { fontSize: 14, fontFamily: "Poppins_500Medium" },
   // Empty state
   emptyState: { alignItems: "center", paddingTop: 20, gap: 12, paddingBottom: 40 },
   emptyIconWrap: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", marginBottom: 4 },
-  emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold", textAlign: "center" },
-  emptyBody: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+  emptyTitle: { fontSize: 18, fontFamily: "Poppins_600SemiBold", textAlign: "center" },
+  emptyBody: { fontSize: 14, fontFamily: "Poppins_400Regular", textAlign: "center", lineHeight: 20 },
   planBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -996,7 +996,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 4,
   },
-  planBtnText: { color: "#FFFFFF", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  planBtnText: { color: "#FFFFFF", fontSize: 15, fontFamily: "Poppins_600SemiBold" },
   // Suggest outfit (single-day)
   suggestDayBtn: {
     flexDirection: "row",
@@ -1009,7 +1009,7 @@ const styles = StyleSheet.create({
     gap: 7,
     marginTop: 2,
   },
-  suggestDayText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  suggestDayText: { fontSize: 14, fontFamily: "Poppins_600SemiBold" },
   // Plan my week banner
   planWeekBtn: { marginHorizontal: 20, marginBottom: 8 },
   planWeekGradient: {
@@ -1021,15 +1021,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 7,
   },
-  planWeekLabel: { color: "#FFF", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  planWeekLabel: { color: "#FFF", fontSize: 14, fontFamily: "Poppins_600SemiBold" },
   // Location prompt
   locationCard: { borderRadius: 16, borderWidth: 1, padding: 24, gap: 12, alignItems: "center" },
-  locationTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  locationBody: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+  locationTitle: { fontSize: 16, fontFamily: "Poppins_600SemiBold" },
+  locationBody: { fontSize: 14, fontFamily: "Poppins_400Regular", textAlign: "center", lineHeight: 20 },
   locationActions: { flexDirection: "row", gap: 10, width: "100%", marginTop: 4 },
   locationBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 12, borderRadius: 12, gap: 6 },
-  locationBtnLabel: { color: "#FFFFFF", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  locationBtnLabel: { color: "#FFFFFF", fontSize: 14, fontFamily: "Poppins_600SemiBold" },
   locationBtnOutline: { alignItems: "center", justifyContent: "center", paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
-  locationBtnOutlineLabel: { fontSize: 14, fontFamily: "Inter_500Medium" },
-  cityInput: { width: "100%", borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontFamily: "Inter_400Regular" },
+  locationBtnOutlineLabel: { fontSize: 14, fontFamily: "Poppins_500Medium" },
+  cityInput: { width: "100%", borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontFamily: "Poppins_400Regular" },
 });

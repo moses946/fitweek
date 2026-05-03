@@ -22,8 +22,6 @@ import brandColors from "@/constants/colors";
 import { GarmentCategory, useGarments } from "@/contexts/GarmentContext";
 import { useColors } from "@/hooks/useColors";
 
-// --- Config ---
-
 const CATEGORIES: GarmentCategory[] = [
   "tops", "bottoms", "dresses", "outerwear", "shoes", "accessories", "other",
 ];
@@ -116,18 +114,13 @@ export default function AddGarmentScreen() {
       setImageUri(asset.uri);
       setStep("analyzing");
 
-      const classified = await classifyImage({
-        imageBase64: asset.base64 ?? undefined,
-      });
+      const classified = await classifyImage({ imageBase64: asset.base64 ?? undefined });
 
       if (classified) {
         setCategory(classified.category);
         setColor(classified.color);
         setTags(classified.tags);
-        // Pre-fill name with the specific Vision label (e.g. "T-Shirt"), not the broad category
-        if (classified.matchedLabel) {
-          setName(classified.matchedLabel);
-        }
+        if (classified.matchedLabel) setName(classified.matchedLabel);
       }
       setStep("review");
     } catch {
@@ -158,7 +151,6 @@ export default function AddGarmentScreen() {
 
   const removeTag = (tag: string) => setTags((prev) => prev.filter((t) => t !== tag));
 
-  // --- Step: Pick ---
   if (step === "pick") {
     return (
       <View
@@ -190,7 +182,7 @@ export default function AddGarmentScreen() {
             <LinearGradient
               colors={brandColors.gradientPrimary}
               start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+              end={{ x: 1, y: 1 }}
               style={styles.pickIconWrap}
             >
               <Feather name="camera" size={24} color="#FFFFFF" />
@@ -209,9 +201,9 @@ export default function AddGarmentScreen() {
             onPress={() => handlePickPhoto(false)}
           >
             <LinearGradient
-              colors={["#4DA3FF", "#7B61FF"]}
+              colors={[brandColors.gradientPrimary[1], brandColors.gradientPrimary[0]]}
               start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+              end={{ x: 1, y: 1 }}
               style={styles.pickIconWrap}
             >
               <Feather name="image" size={24} color="#FFFFFF" />
@@ -226,7 +218,6 @@ export default function AddGarmentScreen() {
     );
   }
 
-  // --- Step: Analyzing ---
   if (step === "analyzing") {
     return (
       <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
@@ -246,7 +237,6 @@ export default function AddGarmentScreen() {
     );
   }
 
-  // --- Step: Review ---
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View
@@ -269,24 +259,19 @@ export default function AddGarmentScreen() {
           <Image source={{ uri: imageUri }} style={styles.reviewImage} contentFit="cover" />
         )}
 
-        {/* Color */}
         <View style={styles.section}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>COLOR</Text>
           <View style={styles.colorRow}>
             <View
               style={[
                 styles.colorDot,
-                {
-                  backgroundColor: COLOR_HEX[color] ?? "#CBD5E1",
-                  borderColor: colors.border,
-                },
+                { backgroundColor: COLOR_HEX[color] ?? "#CBD5E1", borderColor: colors.border },
               ]}
             />
             <Text style={[styles.colorName, { color: colors.foreground }]}>{color}</Text>
           </View>
         </View>
 
-        {/* Category */}
         <View style={styles.section}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>CATEGORY</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillRow}>
@@ -296,7 +281,7 @@ export default function AddGarmentScreen() {
                   <LinearGradient
                     colors={brandColors.gradientPrimary}
                     start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                     style={styles.pillActive}
                   >
                     <Text style={styles.pillTextActive}>{CATEGORY_LABELS[cat]}</Text>
@@ -318,7 +303,6 @@ export default function AddGarmentScreen() {
           </ScrollView>
         </View>
 
-        {/* Tags */}
         {tags.length > 0 && (
           <View style={styles.section}>
             <Text style={[styles.label, { color: colors.mutedForeground }]}>TAGS</Text>
@@ -328,7 +312,7 @@ export default function AddGarmentScreen() {
                   key={tag}
                   style={[
                     styles.tagChip,
-                    { backgroundColor: colors.secondary, borderColor: colors.border },
+                    { backgroundColor: colors.surfaceWash, borderColor: colors.border },
                   ]}
                   onPress={() => removeTag(tag)}
                 >
@@ -340,7 +324,6 @@ export default function AddGarmentScreen() {
           </View>
         )}
 
-        {/* Name */}
         <View style={styles.section}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>NAME (OPTIONAL)</Text>
           <TextInput
@@ -354,24 +337,20 @@ export default function AddGarmentScreen() {
                 backgroundColor: colors.card,
                 borderColor: colors.border,
                 color: colors.foreground,
+                fontFamily: "Poppins_400Regular",
               },
             ]}
           />
         </View>
       </ScrollView>
 
-      {/* Save bar */}
       <View
         style={[
           styles.saveBar,
           { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: pb },
         ]}
       >
-        <GradientButton
-          onPress={handleSave}
-          isLoading={isSaving}
-          label="Save to closet"
-        />
+        <GradientButton onPress={handleSave} isLoading={isSaving} label="Save to wardrobe" />
       </View>
     </View>
   );
@@ -381,7 +360,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { alignItems: "center", justifyContent: "center" },
   sheetHandle: { alignItems: "center", paddingBottom: 8 },
-  handle: { width: 36, height: 4, borderRadius: 2 },
+  handle: { width: 32, height: 4, borderRadius: 2 },
   closeBtn: {
     position: "absolute",
     top: 60,
@@ -393,14 +372,13 @@ const styles = StyleSheet.create({
   },
   sheetTitle: {
     fontSize: 24,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: -0.5,
+    fontFamily: "Poppins_700Bold",
     paddingHorizontal: 24,
     marginTop: 8,
   },
   sheetSubtitle: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Poppins_400Regular",
     paddingHorizontal: 24,
     marginTop: 6,
     marginBottom: 32,
@@ -421,8 +399,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  pickOptionLabel: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  pickOptionSub: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center" },
+  pickOptionLabel: { fontSize: 15, fontFamily: "Poppins_600SemiBold" },
+  pickOptionSub: { fontSize: 12, fontFamily: "Poppins_400Regular", textAlign: "center" },
   analyzingPreview: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   analyzingOverlay: {
     alignItems: "center",
@@ -432,8 +410,8 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     borderRadius: 20,
   },
-  analyzingText: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  analyzingSubtext: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
+  analyzingText: { fontSize: 17, fontFamily: "Poppins_600SemiBold" },
+  analyzingSubtext: { fontSize: 13, fontFamily: "Poppins_400Regular", textAlign: "center" },
   reviewHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -442,38 +420,37 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  reviewTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  reviewTitle: { fontSize: 17, fontFamily: "Poppins_600SemiBold" },
   reviewContent: { paddingHorizontal: 20, paddingTop: 20, gap: 24 },
   reviewImage: { width: "100%", aspectRatio: 0.75, borderRadius: 16 },
   section: { gap: 10 },
-  label: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.8 },
+  label: { fontSize: 11, fontFamily: "Poppins_600SemiBold", letterSpacing: 0.8 },
   colorRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   colorDot: { width: 28, height: 28, borderRadius: 14, borderWidth: 1 },
-  colorName: { fontSize: 15, fontFamily: "Inter_500Medium" },
+  colorName: { fontSize: 15, fontFamily: "Poppins_500Medium" },
   pillRow: { flexDirection: "row" },
   pillWrapper: { marginRight: 8 },
-  pillActive: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-  pillTextActive: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
-  pillInactive: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
-  pillTextInactive: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  pillActive: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  pillTextActive: { fontSize: 13, fontFamily: "Poppins_600SemiBold", color: "#FFFFFF" },
+  pillInactive: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 1 },
+  pillTextInactive: { fontSize: 13, fontFamily: "Poppins_500Medium" },
   tagsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tagChip: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 8,
     borderWidth: 1,
     gap: 6,
   },
-  tagText: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  tagText: { fontSize: 12, fontFamily: "Poppins_400Regular" },
   nameInput: {
     height: 48,
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 14,
     fontSize: 15,
-    fontFamily: "Inter_400Regular",
   },
   saveBar: {
     position: "absolute",

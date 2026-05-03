@@ -50,8 +50,10 @@ export function OutfitAssemblyPanel({
         },
       ]}
     >
-      {/* Drag indicator */}
-      <View style={[styles.handle, { backgroundColor: colors.border }]} />
+      {/* Drag handle */}
+      <View style={styles.handleWrap}>
+        <View style={[styles.handle, { backgroundColor: colors.border }]} />
+      </View>
 
       {/* Header row */}
       <View style={styles.header}>
@@ -84,7 +86,7 @@ export function OutfitAssemblyPanel({
                 contentFit="cover"
               />
               <Pressable
-                style={[styles.removeBtn, { backgroundColor: colors.card }]}
+                style={[styles.removeBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
                 onPress={() => onRemoveGarment(g.id)}
                 hitSlop={4}
               >
@@ -113,11 +115,11 @@ export function OutfitAssemblyPanel({
         <LinearGradient
           colors={brandColors.gradientPrimary}
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+          end={{ x: 1, y: 1 }}
           style={styles.confirmBtn}
         >
           <Feather name="check" size={16} color="#FFFFFF" />
-          <Text style={styles.confirmText}>Confirm Outfit</Text>
+          <Text style={styles.confirmText}>Confirm outfit</Text>
         </LinearGradient>
       </Pressable>
     </View>
@@ -126,16 +128,18 @@ export function OutfitAssemblyPanel({
 
 const styles = StyleSheet.create({
   panel: {
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingTop: 8,
+  },
+  handleWrap: {
+    alignItems: "center",
+    marginBottom: 10,
   },
   handle: {
-    width: 36,
+    width: 32,
     height: 4,
     borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 12,
   },
   header: {
     flexDirection: "row",
@@ -145,11 +149,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Poppins_600SemiBold",
   },
   discardText: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Poppins_400Regular",
   },
   thumbnailRow: {
     gap: 10,
@@ -170,12 +174,9 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
   },
   emptyThumbnails: {
     flexDirection: "row",
@@ -194,12 +195,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 12,
     gap: 8,
   },
   confirmText: {
     color: "#FFFFFF",
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    fontFamily: "Poppins_600SemiBold",
   },
 });

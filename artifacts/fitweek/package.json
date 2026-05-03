@@ -72,6 +72,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "@expo-google-fonts/poppins": "^0.4.1",
     "@supabase/supabase-js": "^2.105.1",
     "expo-file-system": "^19.0.22",
     "expo-notifications": "^0.32.17",

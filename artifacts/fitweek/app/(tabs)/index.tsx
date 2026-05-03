@@ -34,12 +34,10 @@ const CATEGORIES: { key: GarmentCategory | "all"; label: string }[] = [
 ];
 
 const STATUS_COLOR: Record<GarmentStatus, string> = {
-  clean: "#22C55E",
+  clean: "#10B981",
   worn: "#64748B",
-  laundry: "#F97316",
+  laundry: "#0EA5E9",
 };
-
-// ─── Undo toast ───────────────────────────────────────────────────────────────
 
 interface UndoToastProps {
   name: string;
@@ -57,13 +55,11 @@ function UndoToast({ name, onUndo, opacity }: UndoToastProps) {
         "{name}" removed
       </Text>
       <Pressable onPress={onUndo} hitSlop={12}>
-        <Text style={[styles.undoBtn, { color: "#7B61FF" }]}>Undo</Text>
+        <Text style={[styles.undoBtn, { color: brandColors.gradientPrimary[0] }]}>Undo</Text>
       </Pressable>
     </Animated.View>
   );
 }
-
-// ─── Garment card ─────────────────────────────────────────────────────────────
 
 function GarmentCard({
   garment,
@@ -78,32 +74,32 @@ function GarmentCard({
 
   return (
     <Pressable
-      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, opacity: skipped ? 0.5 : 1 }]}
+      style={[
+        styles.card,
+        { backgroundColor: colors.card, borderColor: colors.border, opacity: skipped ? 0.5 : 1 },
+      ]}
       onLongPress={onLongPress}
       delayLongPress={400}
     >
       <Image source={{ uri: garment.imageUri }} style={styles.cardImage} contentFit="cover" />
       {skipped && (
-        <View style={[styles.skippedBadge, { backgroundColor: colors.muted }]}>
+        <View style={[styles.skippedBadge, { backgroundColor: colors.surfaceWash }]}>
           <Text style={[styles.skippedText, { color: colors.mutedForeground }]}>Skipped</Text>
         </View>
       )}
-      <View style={styles.cardOverlay}>
-        <View style={styles.cardMeta}>
-          <View style={[styles.statusDot, { backgroundColor: STATUS_COLOR[garment.status] }]} />
-          <Text style={[styles.cardName, { color: colors.foreground }]} numberOfLines={1}>
-            {garment.name}
-          </Text>
-        </View>
-        <Text style={[styles.cardColor, { color: colors.mutedForeground }]} numberOfLines={1}>
-          {garment.color}
+      {/* Status dot — top right */}
+      <View style={[styles.statusDotAbsolute, { backgroundColor: STATUS_COLOR[garment.status] }]} />
+      <View style={styles.cardBottom}>
+        <Text style={[styles.cardName, { color: colors.foreground }]} numberOfLines={1}>
+          {garment.name}
+        </Text>
+        <Text style={[styles.cardCategory, { color: colors.mutedForeground }]} numberOfLines={1}>
+          {garment.category.toUpperCase()}
         </Text>
       </View>
     </Pressable>
   );
 }
-
-// ─── Main screen ──────────────────────────────────────────────────────────────
 
 interface PendingUndo {
   id: string;
@@ -132,44 +128,27 @@ export default function ClosetScreen() {
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const purgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Visible garments: exclude soft-deleted
   const visible = garments.filter((g) => g.deletedAt === null);
   const filtered =
     activeCategory === "all"
       ? visible
       : visible.filter((g) => g.category === activeCategory);
 
-  // ── Undo toast lifecycle ────────────────────────────────────────────────────
-
   const showUndoToast = (id: string, name: string) => {
     if (purgeTimerRef.current) clearTimeout(purgeTimerRef.current);
-
     setPendingUndo({ id, name });
-
-    // Fade in
-    Animated.timing(toastOpacity, {
-      toValue: 1,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-
-    // Auto-purge after 3s
-    purgeTimerRef.current = setTimeout(() => {
-      dismissUndo(id, true);
-    }, 3000);
+    Animated.timing(toastOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    purgeTimerRef.current = setTimeout(() => { dismissUndo(id, true); }, 3000);
   };
 
   const dismissUndo = (id: string, shouldPurge: boolean) => {
     if (purgeTimerRef.current) clearTimeout(purgeTimerRef.current);
-
-    Animated.timing(toastOpacity, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(async () => {
-      setPendingUndo(null);
-      if (shouldPurge) await purgeGarment(id);
-    });
+    Animated.timing(toastOpacity, { toValue: 0, duration: 200, useNativeDriver: true }).start(
+      async () => {
+        setPendingUndo(null);
+        if (shouldPurge) await purgeGarment(id);
+      },
+    );
   };
 
   const handleUndo = async () => {
@@ -182,16 +161,11 @@ export default function ClosetScreen() {
   };
 
   useEffect(() => {
-    return () => {
-      if (purgeTimerRef.current) clearTimeout(purgeTimerRef.current);
-    };
+    return () => { if (purgeTimerRef.current) clearTimeout(purgeTimerRef.current); };
   }, []);
-
-  // ── Long-press menu ─────────────────────────────────────────────────────────
 
   const handleLongPress = (garment: Garment) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
     const today = new Date();
     const currentlySkipped = isSkippedToday(garment, today) || isSkippedUntil(garment, today);
 
@@ -201,27 +175,13 @@ export default function ClosetScreen() {
         onPress: () =>
           garment.status === "clean" ? markWorn(garment.id) : markClean(garment.id),
       },
-      {
-        text: "Send to laundry",
-        onPress: () => sendToLaundry(garment.id),
-      },
+      { text: "Send to laundry", onPress: () => sendToLaundry(garment.id) },
       ...(!currentlySkipped
         ? [
-            {
-              text: "Skip today",
-              onPress: () => skipForSession(garment.id),
-            },
-            {
-              text: "Skip this week",
-              onPress: () => skipForWeek(garment.id),
-            },
+            { text: "Skip today", onPress: () => skipForSession(garment.id) },
+            { text: "Skip this week", onPress: () => skipForWeek(garment.id) },
           ]
-        : [
-            {
-              text: "Remove skip",
-              onPress: () => markClean(garment.id), // restore clean state clears skipUntil
-            },
-          ]),
+        : [{ text: "Remove skip", onPress: () => markClean(garment.id) }]),
       {
         text: "Delete garment",
         style: "destructive" as const,
@@ -246,20 +206,14 @@ export default function ClosetScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.foreground }]}>My Closet</Text>
-        <Pressable
-          testID="add-garment-button"
-          onPress={() => router.push("/(garment)/add")}
-        >
-          <LinearGradient
-            colors={brandColors.gradientPrimary}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.addBtn}
-          >
-            <Feather name="plus" size={18} color="#FFFFFF" />
-          </LinearGradient>
-        </Pressable>
+        <View style={styles.titleRow}>
+          <Text style={[styles.title, { color: colors.foreground }]}>Wardrobe</Text>
+          {visible.length > 0 && (
+            <Text style={[styles.itemCount, { color: colors.mutedForeground }]}>
+              {visible.length} {visible.length === 1 ? "item" : "items"}
+            </Text>
+          )}
+        </View>
       </View>
 
       {/* Category filter */}
@@ -279,7 +233,7 @@ export default function ClosetScreen() {
                 <LinearGradient
                   colors={brandColors.gradientPrimary}
                   start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
+                  end={{ x: 1, y: 1 }}
                   style={styles.filterPillActive}
                 >
                   <Text style={styles.filterLabelActive}>{label}</Text>
@@ -304,11 +258,11 @@ export default function ClosetScreen() {
       {/* Content */}
       {visible.length === 0 && !isLoading ? (
         <View style={styles.emptyState}>
-          <View style={[styles.emptyIconWrap, { backgroundColor: colors.muted }]}>
-            <Feather name="shopping-bag" size={32} color={colors.mutedForeground} />
+          <View style={[styles.emptyIconWrap, { backgroundColor: colors.surfaceWash }]}>
+            <Feather name="shopping-bag" size={32} color={colors.primary} />
           </View>
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-            Your closet is empty
+            Your wardrobe is empty
           </Text>
           <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
             Photograph your garments and Vision AI will classify them automatically.
@@ -323,9 +277,9 @@ export default function ClosetScreen() {
           <View style={styles.legend}>
             {(
               [
-                ["clean", "#22C55E", "Clean"],
+                ["clean", "#10B981", "Clean"],
                 ["worn", "#64748B", "Worn"],
-                ["laundry", "#F97316", "In laundry"],
+                ["laundry", "#0EA5E9", "In laundry"],
               ] as [string, string, string][]
             ).map(([key, color, label]) => (
               <View key={key} style={styles.legendItem}>
@@ -358,6 +312,22 @@ export default function ClosetScreen() {
         />
       )}
 
+      {/* Floating + button */}
+      <Pressable
+        testID="add-garment-button"
+        onPress={() => router.push("/(garment)/add")}
+        style={styles.fab}
+      >
+        <LinearGradient
+          colors={brandColors.gradientPrimary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.fabGradient}
+        >
+          <Feather name="plus" size={24} color="#FFFFFF" />
+        </LinearGradient>
+      </Pressable>
+
       {/* Undo toast */}
       {pendingUndo && (
         <UndoToast
@@ -373,38 +343,64 @@ export default function ClosetScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 12,
   },
-  title: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
-  addBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 8,
+  },
+  title: { fontSize: 28, fontFamily: "Poppins_700Bold" },
+  itemCount: { fontSize: 12, fontFamily: "Poppins_400Regular" },
   filterRow: { paddingHorizontal: 16, paddingBottom: 14, gap: 8, flexDirection: "row" },
-  filterPillActive: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-  filterLabelActive: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
-  filterPillInactive: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
-  filterLabelInactive: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  filterPillActive: {
+    paddingHorizontal: 12,
+    height: 32,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterLabelActive: { fontSize: 12, fontFamily: "Poppins_500Medium", color: "#FFFFFF" },
+  filterPillInactive: {
+    paddingHorizontal: 12,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterLabelInactive: { fontSize: 12, fontFamily: "Poppins_500Medium" },
   grid: { paddingHorizontal: 12, paddingTop: 4 },
   row: { gap: 10, marginBottom: 10 },
-  card: { flex: 1, borderRadius: 16, borderWidth: 1, overflow: "hidden" },
+  card: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
   cardImage: { width: "100%", aspectRatio: 0.75 },
   skippedBadge: {
     position: "absolute",
     top: 8,
-    right: 8,
+    left: 8,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: 6,
   },
-  skippedText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
-  cardOverlay: { padding: 10 },
-  cardMeta: { flexDirection: "row", alignItems: "center", gap: 6 },
-  statusDot: { width: 7, height: 7, borderRadius: 4 },
-  cardName: { fontSize: 13, fontFamily: "Inter_500Medium", flex: 1 },
-  cardColor: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
+  skippedText: { fontSize: 10, fontFamily: "Poppins_600SemiBold" },
+  statusDotAbsolute: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  cardBottom: { padding: 10, gap: 2 },
+  cardName: { fontSize: 13, fontFamily: "Poppins_600SemiBold" },
+  cardCategory: { fontSize: 11, fontFamily: "Poppins_500Medium", letterSpacing: 0.5 },
   emptyState: {
     flex: 1,
     alignItems: "center",
@@ -421,15 +417,32 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 4,
   },
-  emptyTitle: { fontSize: 20, fontFamily: "Inter_600SemiBold", textAlign: "center" },
-  emptyBody: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 21 },
+  emptyTitle: { fontSize: 20, fontFamily: "Poppins_600SemiBold", textAlign: "center" },
+  emptyBody: { fontSize: 14, fontFamily: "Poppins_400Regular", textAlign: "center", lineHeight: 21 },
   addFirstBtn: { marginTop: 4 },
   legend: { flexDirection: "row", gap: 16, marginTop: 8 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   legendDot: { width: 7, height: 7, borderRadius: 4 },
-  legendText: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  legendText: { fontSize: 11, fontFamily: "Poppins_400Regular" },
   filteredEmpty: { flex: 1, alignItems: "center", paddingTop: 60 },
-  filteredEmptyText: { fontSize: 15, fontFamily: "Inter_400Regular" },
+  filteredEmptyText: { fontSize: 15, fontFamily: "Poppins_400Regular" },
+  fab: {
+    position: "absolute",
+    bottom: 80,
+    right: 20,
+  },
+  fabGradient: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "rgba(139,47,245,0.30)",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    elevation: 8,
+  },
   undoToast: {
     position: "absolute",
     bottom: 100,
@@ -447,6 +460,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
-  undoText: { fontSize: 14, fontFamily: "Inter_400Regular", flex: 1, marginRight: 12 },
-  undoBtn: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  undoText: { fontSize: 14, fontFamily: "Poppins_400Regular", flex: 1, marginRight: 12 },
+  undoBtn: { fontSize: 14, fontFamily: "Poppins_700Bold" },
 });

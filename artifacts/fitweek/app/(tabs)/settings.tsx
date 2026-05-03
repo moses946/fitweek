@@ -58,8 +58,6 @@ function SettingsRow({ icon, label, value, onPress, destructive, testID }: Setti
   );
 }
 
-// ── Location modal ────────────────────────────────────────────────────────────
-
 function LocationModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const colors = useColors();
   const { requestLocationAndFetch, setCity, city } = useWeather();
@@ -98,7 +96,7 @@ function LocationModal({ visible, onClose }: { visible: boolean; onClose: () => 
               <LinearGradient
                 colors={brandColors.gradientPrimary}
                 start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+                end={{ x: 1, y: 1 }}
                 style={styles.sheetBtn}
               >
                 <Feather name="navigation" size={15} color="#FFF" />
@@ -131,7 +129,7 @@ function LocationModal({ visible, onClose }: { visible: boolean; onClose: () => 
                 <LinearGradient
                   colors={brandColors.gradientPrimary}
                   start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
+                  end={{ x: 1, y: 1 }}
                   style={styles.sheetBtn}
                 >
                   <Text style={styles.sheetBtnLabel}>Confirm</Text>
@@ -150,8 +148,6 @@ function LocationModal({ visible, onClose }: { visible: boolean; onClose: () => 
     </Modal>
   );
 }
-
-// ── Notifications modal ───────────────────────────────────────────────────────
 
 function NotificationsModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const colors = useColors();
@@ -230,8 +226,6 @@ function NotificationsModal({ visible, onClose }: { visible: boolean; onClose: (
   );
 }
 
-// ── Birthday modal ────────────────────────────────────────────────────────────
-
 function BirthdayModal({
   visible,
   current,
@@ -281,7 +275,7 @@ function BirthdayModal({
             <LinearGradient
               colors={brandColors.gradientPrimary}
               start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+              end={{ x: 1, y: 1 }}
               style={styles.sheetBtn}
             >
               <Text style={styles.sheetBtnLabel}>Save</Text>
@@ -298,8 +292,6 @@ function BirthdayModal({
     </Modal>
   );
 }
-
-// ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function SettingsScreen() {
   const colors = useColors();
@@ -325,7 +317,6 @@ export default function SettingsScreen() {
     ]);
   };
 
-  // Prefer Supabase-persisted profile, fall back to live user_metadata from session.
   const displayName =
     userProfile?.name ??
     user?.user_metadata?.["full_name"] ??
@@ -345,14 +336,8 @@ export default function SettingsScreen() {
 
   return (
     <>
-      <LocationModal
-        visible={locationModalVisible}
-        onClose={() => setLocationModalVisible(false)}
-      />
-      <NotificationsModal
-        visible={notifModalVisible}
-        onClose={() => setNotifModalVisible(false)}
-      />
+      <LocationModal visible={locationModalVisible} onClose={() => setLocationModalVisible(false)} />
+      <NotificationsModal visible={notifModalVisible} onClose={() => setNotifModalVisible(false)} />
       <BirthdayModal
         visible={birthdayModalVisible}
         current={birthdate}
@@ -374,11 +359,7 @@ export default function SettingsScreen() {
 
         <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {avatarUrl ? (
-            <Image
-              source={{ uri: avatarUrl }}
-              style={styles.avatarImage}
-              contentFit="cover"
-            />
+            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} contentFit="cover" />
           ) : (
             <View style={[styles.avatarPlaceholder, { backgroundColor: colors.accent }]}>
               <Text style={[styles.avatarInitials, { color: colors.card }]}>{initials || "?"}</Text>
@@ -446,8 +427,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, gap: 16 },
   screenTitle: {
     fontSize: 28,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: -0.5,
+    fontFamily: "Poppins_700Bold",
     marginBottom: 4,
   },
   profileCard: {
@@ -470,11 +450,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarInitials: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  avatarInitials: { fontSize: 20, fontFamily: "Poppins_700Bold" },
   profileInfo: { flex: 1, gap: 2 },
-  profileName: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  profileEmail: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  profileBirthdate: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  profileName: { fontSize: 16, fontFamily: "Poppins_600SemiBold" },
+  profileEmail: { fontSize: 13, fontFamily: "Poppins_400Regular" },
+  profileBirthdate: { fontSize: 12, fontFamily: "Poppins_400Regular", marginTop: 2 },
   section: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
   row: {
     flexDirection: "row",
@@ -484,19 +464,15 @@ const styles = StyleSheet.create({
     gap: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  rowLabel: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
-  rowValue: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  rowLabel: { flex: 1, fontSize: 15, fontFamily: "Poppins_400Regular" },
+  rowValue: { fontSize: 13, fontFamily: "Poppins_400Regular" },
   version: {
     textAlign: "center",
     fontSize: 12,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Poppins_400Regular",
     marginTop: 8,
   },
-  // Modal / sheet
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-  },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(26,31,54,0.40)" },
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -505,14 +481,14 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   sheetHandle: {
-    width: 36,
+    width: 32,
     height: 4,
     borderRadius: 2,
     alignSelf: "center",
     marginBottom: 4,
   },
-  sheetTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  sheetBody: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  sheetTitle: { fontSize: 18, fontFamily: "Poppins_700Bold" },
+  sheetBody: { fontSize: 14, fontFamily: "Poppins_400Regular", lineHeight: 20 },
   sheetActions: { flexDirection: "row", gap: 10 },
   sheetBtn: {
     flexDirection: "row",
@@ -522,7 +498,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 6,
   },
-  sheetBtnLabel: { color: "#FFF", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  sheetBtnLabel: { color: "#FFF", fontSize: 14, fontFamily: "Poppins_600SemiBold" },
   sheetBtnOutline: {
     alignItems: "center",
     justifyContent: "center",
@@ -530,7 +506,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  sheetBtnOutlineLabel: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  sheetBtnOutlineLabel: { fontSize: 14, fontFamily: "Poppins_500Medium" },
   citySection: { gap: 12 },
   cityInput: {
     borderWidth: 1,
@@ -538,9 +514,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Poppins_400Regular",
   },
-  // Notifications
   notifRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -549,9 +524,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   notifInfo: { flex: 1 },
-  notifLabel: { fontSize: 15, fontFamily: "Inter_500Medium" },
-  notifSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  permNote: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  notifLabel: { fontSize: 15, fontFamily: "Poppins_500Medium" },
+  notifSub: { fontSize: 12, fontFamily: "Poppins_400Regular", marginTop: 2 },
+  permNote: { fontSize: 12, fontFamily: "Poppins_400Regular", lineHeight: 18 },
   sheetCloseBtn: {
     alignItems: "center",
     paddingVertical: 13,
@@ -559,5 +534,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginTop: 4,
   },
-  sheetCloseBtnLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  sheetCloseBtnLabel: { fontSize: 14, fontFamily: "Poppins_600SemiBold" },
 });

@@ -128,7 +128,7 @@ export default function ModelPhotoScreen() {
             onPress={handlePickPhoto}
             testID="pick-photo-button"
           >
-            <Feather name="user" size={48} color={colors.muted} />
+            <Feather name="user" size={48} color={colors.border} />
             <Pressable
               style={[styles.addPhotoButton, { backgroundColor: colors.primary }]}
               onPress={handlePickPhoto}
@@ -183,8 +183,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   header: { paddingHorizontal: 24, gap: 8, marginBottom: 24 },
-  title: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
-  subtitle: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22 },
+  title: { fontSize: 28, fontFamily: "Poppins_700Bold" },
+  subtitle: { fontSize: 15, fontFamily: "Poppins_400Regular", lineHeight: 22 },
   photoArea: {
     flex: 1,
     alignItems: "center",
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 8,
   },
-  addPhotoText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
+  addPhotoText: { fontSize: 14, fontFamily: "Poppins_600SemiBold", color: "#FFFFFF" },
   photoPreviewWrapper: {
     width: "100%",
     maxWidth: 260,
@@ -230,10 +230,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 8,
   },
-  retakeText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
+  retakeText: { fontSize: 14, fontFamily: "Poppins_600SemiBold", color: "#FFFFFF" },
   tips: { paddingHorizontal: 24, paddingVertical: 20, gap: 10 },
   tipRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  tipText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  tipText: { fontSize: 13, fontFamily: "Poppins_400Regular" },
   actions: { paddingHorizontal: 24, gap: 14, alignItems: "center" },
-  skipText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  skipText: { fontSize: 14, fontFamily: "Poppins_400Regular" },
 });

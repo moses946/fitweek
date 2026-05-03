@@ -1,6 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -17,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OutfitAssemblyPanel } from "@/components/OutfitAssemblyPanel";
 import { BackCard, CARD_HEIGHT, CARD_WIDTH, SwipeCard } from "@/components/SwipeCard";
 import { WeatherBadge, WeatherUnavailableBadge } from "@/components/WeatherBadge";
+import brandColors from "@/constants/colors";
 import { useGarments } from "@/contexts/GarmentContext";
 import { useOutfitSlots } from "@/contexts/OutfitSlotContext";
 import { useWeather } from "@/contexts/WeatherContext";
@@ -26,8 +28,6 @@ import type { Garment, OutfitSlot } from "@/lib/types";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const LOW_DECK_THRESHOLD = 3;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatDateLabel(isoDate: string): string {
   try {
@@ -43,13 +43,11 @@ function formatDateLabel(isoDate: string): string {
   }
 }
 
-// ── Empty deck state ──────────────────────────────────────────────────────────
-
 function EmptyDeck({ onClose }: { onClose: () => void }) {
   const colors = useColors();
   return (
     <View style={styles.emptyDeck}>
-      <View style={[styles.emptyIconWrap, { backgroundColor: colors.muted }]}>
+      <View style={[styles.emptyIconWrap, { backgroundColor: colors.surfaceWash }]}>
         <Feather name="check-circle" size={40} color={colors.primary} />
       </View>
       <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
@@ -57,21 +55,17 @@ function EmptyDeck({ onClose }: { onClose: () => void }) {
       </Text>
       <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
         All eligible garments have been reviewed. Confirm your outfit or add
-        more garments to your closet.
+        more garments to your wardrobe.
       </Text>
       <Pressable
         style={[styles.closeBtn, { borderColor: colors.border }]}
         onPress={onClose}
       >
-        <Text style={[styles.closeBtnText, { color: colors.foreground }]}>
-          Done
-        </Text>
+        <Text style={[styles.closeBtnText, { color: colors.foreground }]}>Done</Text>
       </Pressable>
     </View>
   );
 }
-
-// ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function SwipeDeckScreen() {
   const { date } = useLocalSearchParams<{ date: string }>();
@@ -95,20 +89,17 @@ export default function SwipeDeckScreen() {
   const [sessionPool, setSessionPool] = useState<Garment[]>([]);
   const [isConfirming, setIsConfirming] = useState(false);
 
-  // Stable ref so callbacks inside gestures capture latest state
   const liveDeckRef = useRef(liveDeck);
   const sessionPoolRef = useRef(sessionPool);
   liveDeckRef.current = liveDeck;
   sessionPoolRef.current = sessionPool;
 
-  // ── Initialise slot + deck ──────────────────────────────────────────────────
   useEffect(() => {
     if (!date) return;
 
     getOrCreateDraft(date).then((s) => {
       setSlot(s);
 
-      // Build the suggestion deck for this date
       const confirmedIds = new Set(
         slots
           .filter((sl) => sl.status === "confirmed" && sl.date !== date)
@@ -125,23 +116,18 @@ export default function SwipeDeckScreen() {
     });
   }, [date]);
 
-  // ── Live deck sync with slot (when garment added externally) ───────────────
-  // Keep slot in sync with the latest context state
   useEffect(() => {
     if (!slot) return;
     const updated = slots.find((s) => s.id === slot.id);
     if (updated) setSlot(updated);
   }, [slots]);
 
-  // ── Low-deck reintroduction ─────────────────────────────────────────────────
   useEffect(() => {
     if (liveDeck.length <= LOW_DECK_THRESHOLD && sessionPool.length > 0) {
       setLiveDeck((prev) => [...prev, ...sessionPool]);
       setSessionPool([]);
     }
   }, [liveDeck.length, sessionPool.length]);
-
-  // ── Swipe handlers ──────────────────────────────────────────────────────────
 
   const advanceDeck = useCallback(
     (wasSkipped: boolean, garment: Garment) => {
@@ -151,7 +137,6 @@ export default function SwipeDeckScreen() {
       setSessionPool(newPool);
       setLiveDeck((prev) => {
         const next = prev.slice(1);
-        // Inline reintroduction if low
         if (next.length <= LOW_DECK_THRESHOLD && newPool.length > 0) {
           setSessionPool([]);
           return [...next, ...newPool];
@@ -165,7 +150,7 @@ export default function SwipeDeckScreen() {
   const handleSwipeRight = useCallback(
     async (garment: Garment) => {
       if (!slot) return;
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await addGarmentToSlot(slot.id, garment.id);
       advanceDeck(false, garment);
     },
@@ -202,8 +187,6 @@ export default function SwipeDeckScreen() {
     },
     [skipForWeek, advanceDeck],
   );
-
-  // ── Confirm / discard ───────────────────────────────────────────────────────
 
   const handleConfirm = useCallback(async () => {
     if (!slot) return;
@@ -245,9 +228,12 @@ export default function SwipeDeckScreen() {
     [slot, removeGarmentFromSlot],
   );
 
-  // ── Current forecast for this day ─────────────────────────────────────────
   const todayForecast = forecast?.find((f) => f.date === date) ?? null;
   const currentCard = liveDeck[0];
+
+  // Progress: how many of 7 days have confirmed slots
+  const confirmedCount = slots.filter((s) => s.status === "confirmed").length;
+  const progressRatio = Math.min(confirmedCount / 7, 1);
 
   return (
     <View
@@ -278,19 +264,28 @@ export default function SwipeDeckScreen() {
           </View>
         </View>
 
-        {/* Deck counter */}
         <Text style={[styles.deckCount, { color: colors.mutedForeground }]}>
           {liveDeck.length} left
         </Text>
       </View>
 
+      {/* Gradient progress bar */}
+      <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+        <LinearGradient
+          colors={brandColors.gradientPrimary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[styles.progressFill, { width: `${progressRatio * 100}%` as any }]}
+        />
+      </View>
+
       {/* Hint */}
       <View style={styles.hintRow}>
-        <Text style={[styles.hintText, { color: "#EF4444" }]}>← Skip</Text>
+        <Text style={[styles.hintText, { color: colors.statusLaundry }]}>← Skip</Text>
         <Text style={[styles.hintSub, { color: colors.mutedForeground }]}>
           Long-press to skip for week
         </Text>
-        <Text style={[styles.hintText, { color: "#22C55E" }]}>Add →</Text>
+        <Text style={[styles.hintText, { color: colors.statusClean }]}>Add →</Text>
       </View>
 
       {/* Card stack */}
@@ -299,22 +294,12 @@ export default function SwipeDeckScreen() {
           <EmptyDeck onClose={() => router.back()} />
         ) : (
           <View style={styles.stack}>
-            {/* Back cards (non-interactive, rendered bottom-up) */}
             {liveDeck[2] && (
-              <BackCard
-                garment={liveDeck[2]}
-                scale={0.90}
-                translateY={20}
-              />
+              <BackCard garment={liveDeck[2]} scale={0.90} translateY={20} />
             )}
             {liveDeck[1] && (
-              <BackCard
-                garment={liveDeck[1]}
-                scale={0.95}
-                translateY={10}
-              />
+              <BackCard garment={liveDeck[1]} scale={0.94} translateY={10} />
             )}
-            {/* Top card */}
             {currentCard && (
               <SwipeCard
                 key={currentCard.id}
@@ -350,9 +335,21 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   headerCenter: { flex: 1, alignItems: "center", gap: 4 },
-  headerDate: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  headerDate: { fontSize: 15, fontFamily: "Poppins_600SemiBold" },
   headerWeather: { flexDirection: "row", alignItems: "center" },
-  deckCount: { fontSize: 13, fontFamily: "Inter_400Regular", minWidth: 48, textAlign: "right" },
+  deckCount: { fontSize: 13, fontFamily: "Poppins_400Regular", minWidth: 48, textAlign: "right" },
+  progressTrack: {
+    height: 4,
+    marginHorizontal: 20,
+    borderRadius: 2,
+    marginBottom: 8,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: 4,
+    borderRadius: 2,
+    minWidth: 4,
+  },
   hintRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -360,8 +357,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     paddingBottom: 12,
   },
-  hintText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  hintSub: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  hintText: { fontSize: 13, fontFamily: "Poppins_600SemiBold" },
+  hintSub: { fontSize: 11, fontFamily: "Poppins_400Regular" },
   deckArea: {
     flex: 1,
     alignItems: "center",
@@ -386,10 +383,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 4,
   },
-  emptyTitle: { fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" },
+  emptyTitle: { fontSize: 20, fontFamily: "Poppins_700Bold", textAlign: "center" },
   emptyBody: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Poppins_400Regular",
     textAlign: "center",
     lineHeight: 20,
   },
@@ -400,5 +397,5 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  closeBtnText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  closeBtnText: { fontSize: 14, fontFamily: "Poppins_500Medium" },
 });

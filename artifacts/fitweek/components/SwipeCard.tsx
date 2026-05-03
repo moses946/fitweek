@@ -16,25 +16,24 @@ import type { Garment } from "@/lib/types";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 export const CARD_WIDTH = SCREEN_WIDTH - 40;
-export const CARD_HEIGHT = CARD_WIDTH * 1.35;
+export const CARD_HEIGHT = CARD_WIDTH * 1.375;
 const SWIPE_THRESHOLD = 80;
 const OUT_X = SCREEN_WIDTH + 100;
 
 const CATEGORY_LABELS: Record<string, string> = {
-  tops: "Top",
-  bottoms: "Trousers",
-  dresses: "Dress",
-  outerwear: "Jacket",
-  shoes: "Shoes",
-  accessories: "Accessories",
-  other: "Other",
+  tops: "TOPS",
+  bottoms: "BOTTOMS",
+  dresses: "DRESSES",
+  outerwear: "OUTERWEAR",
+  shoes: "SHOES",
+  accessories: "ACCESSORIES",
+  other: "OTHER",
 };
 
 interface SwipeCardProps {
   garment: Garment;
   onSwipeRight: () => void;
   onSwipeLeft: () => void;
-  /** Called with a long press — used to trigger "skip for week" */
   onLongPress?: () => void;
 }
 
@@ -52,16 +51,18 @@ export function SwipeCard({
     transform: [
       { translateX: tx.value },
       { translateY: ty.value },
-      { rotate: `${interpolate(tx.value, [-SCREEN_WIDTH, 0, SCREEN_WIDTH], [-25, 0, 25])}deg` },
+      { rotate: `${interpolate(tx.value, [-SCREEN_WIDTH, 0, SCREEN_WIDTH], [-15, 0, 15])}deg` },
     ],
   }));
 
-  const addLabelStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(tx.value, [0, SWIPE_THRESHOLD], [0, 1], "clamp"),
+  // Green "Adding" overlay — fades in at 20% of threshold
+  const addOverlayStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(tx.value, [0, SWIPE_THRESHOLD * 0.8], [0, 1], "clamp"),
   }));
 
-  const skipLabelStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(tx.value, [-SWIPE_THRESHOLD, 0], [1, 0], "clamp"),
+  // Grey "Skip" overlay — fades in on left drag
+  const skipOverlayStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(tx.value, [-SWIPE_THRESHOLD * 0.8, 0], [1, 0], "clamp"),
   }));
 
   const pan = Gesture.Pan()
@@ -79,8 +80,8 @@ export function SwipeCard({
           runOnJS(onSwipeLeft)(),
         );
       } else {
-        tx.value = withSpring(0, { damping: 15 });
-        ty.value = withSpring(0, { damping: 15 });
+        tx.value = withSpring(0, { mass: 1, stiffness: 280, damping: 28 });
+        ty.value = withSpring(0, { mass: 1, stiffness: 280, damping: 28 });
       }
     });
 
@@ -94,42 +95,37 @@ export function SwipeCard({
 
   return (
     <GestureDetector gesture={gesture}>
-      <Animated.View
-        style={[
-          styles.card,
-          { backgroundColor: colors.card, shadowColor: colors.foreground },
-          animatedCard,
-        ]}
-      >
-        {/* Garment image */}
+      <Animated.View style={[styles.card, { backgroundColor: colors.card }, animatedCard]}>
+        {/* Garment image — top 65% */}
         <Image
           source={{ uri: garment.imageUri }}
           style={styles.image}
           contentFit="cover"
         />
 
-        {/* ADD label overlay */}
-        <Animated.View style={[styles.labelAdd, addLabelStyle]}>
-          <Text style={styles.labelAddText}>ADD ✓</Text>
+        {/* ADD colour overlay */}
+        <Animated.View style={[styles.addOverlay, addOverlayStyle]}>
+          <Text style={styles.addLabel}>Adding</Text>
         </Animated.View>
 
-        {/* SKIP label overlay */}
-        <Animated.View style={[styles.labelSkip, skipLabelStyle]}>
-          <Text style={styles.labelSkipText}>SKIP ✗</Text>
+        {/* SKIP colour overlay */}
+        <Animated.View style={[styles.skipOverlay, skipOverlayStyle]}>
+          <Text style={styles.skipLabel}>Skip</Text>
         </Animated.View>
 
-        {/* Bottom info strip */}
+        {/* Bottom info strip — white, 35% */}
         <View style={styles.info}>
-          <View
-            style={[styles.categoryBadge, { backgroundColor: colors.primary }]}
-          >
-            <Text style={styles.categoryText}>
-              {CATEGORY_LABELS[garment.category] ?? garment.category}
-            </Text>
-          </View>
-          <Text style={[styles.colorText, { color: colors.foreground }]}>
-            {garment.color}
+          <Text style={[styles.garmentName, { color: colors.foreground }]} numberOfLines={1}>
+            {garment.name}
           </Text>
+          <View style={styles.metaRow}>
+            <Text style={[styles.categoryTag, { color: colors.mutedForeground }]}>
+              {CATEGORY_LABELS[garment.category] ?? garment.category.toUpperCase()}
+            </Text>
+            {garment.color ? (
+              <View style={styles.colourSwatch} />
+            ) : null}
+          </View>
         </View>
       </Animated.View>
     </GestureDetector>
@@ -153,7 +149,7 @@ export function BackCard({
         styles.card,
         {
           backgroundColor: colors.card,
-          shadowColor: colors.foreground,
+          opacity: 0.65,
           transform: [{ scale }, { translateY }],
           position: "absolute",
         },
@@ -164,6 +160,7 @@ export function BackCard({
         style={styles.image}
         contentFit="cover"
       />
+      <View style={styles.info} />
     </Animated.View>
   );
 }
@@ -172,75 +169,80 @@ const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    borderRadius: 20,
+    borderRadius: 16,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E4E0F5",
+    shadowColor: "rgba(139, 47, 245, 0.14)",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
+    shadowOpacity: 1,
+    shadowRadius: 40,
     elevation: 8,
   },
   image: {
-    flex: 1,
+    flex: 65,
   },
-  labelAdd: {
+  addOverlay: {
     position: "absolute",
-    top: 36,
-    left: 24,
-    borderWidth: 3,
-    borderColor: "#22C55E",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    transform: [{ rotate: "-15deg" }],
-  },
-  labelAddText: {
-    color: "#22C55E",
-    fontSize: 24,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: 1,
-  },
-  labelSkip: {
-    position: "absolute",
-    top: 36,
-    right: 24,
-    borderWidth: 3,
-    borderColor: "#EF4444",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    transform: [{ rotate: "15deg" }],
-  },
-  labelSkipText: {
-    color: "#EF4444",
-    fontSize: 24,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: 1,
-  },
-  info: {
-    position: "absolute",
-    bottom: 0,
+    top: 0,
     left: 0,
     right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(16, 185, 129, 0.15)",
+    justifyContent: "flex-start",
+    paddingTop: 40,
+    paddingLeft: 24,
+  },
+  addLabel: {
+    color: "#10B981",
+    fontSize: 12,
+    fontFamily: "Poppins_600SemiBold",
+    letterSpacing: 0.5,
+  },
+  skipOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(100, 116, 139, 0.10)",
+    justifyContent: "flex-start",
+    alignItems: "flex-end",
+    paddingTop: 40,
+    paddingRight: 24,
+  },
+  skipLabel: {
+    color: "#64748B",
+    fontSize: 12,
+    fontFamily: "Poppins_600SemiBold",
+    letterSpacing: 0.5,
+  },
+  info: {
+    flex: 35,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    justifyContent: "center",
+    gap: 4,
+  },
+  garmentName: {
+    fontSize: 20,
+    fontFamily: "Poppins_700Bold",
+  },
+  metaRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: "rgba(0,0,0,0.45)",
   },
-  categoryBadge: {
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  categoryTag: {
+    fontSize: 11,
+    fontFamily: "Poppins_500Medium",
+    letterSpacing: 0.5,
   },
-  categoryText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-  },
-  colorText: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
+  colourSwatch: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#E4E0F5",
   },
 });
