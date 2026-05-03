@@ -146,7 +146,13 @@ async function callTryon(data: unknown[]): Promise<string> {
 
         if (line === "event: error") {
           const dataLine = lines[i + 1] ?? "";
-          errorMsg = `Gradio error: ${dataLine}`;
+          const payload = dataLine.startsWith("data: ") ? dataLine.slice(6).trim() : dataLine.trim();
+          // "data: null" on an error event means the Space is cold/at capacity — treat as retriable sentinel
+          if (payload === "null" || payload === "") {
+            errorMsg = `${GRADIO_DATA_NULL}: Space returned error:null — cold-start or at capacity`;
+          } else {
+            errorMsg = `Gradio error: ${dataLine}`;
+          }
           break;
         }
       }

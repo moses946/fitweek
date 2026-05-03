@@ -1,0 +1,88 @@
+LOG  [VTO] ── handleGenerateVto START ──
+ LOG  [VTO] slot.id: mopog4zcqshwgc garmentIds: ["mopof9hi2dmv04"]
+ LOG  [VTO] modelImageUrl present: file:///var/mobile/Containers/Data/Application/23E07405-2F9D…
+ LOG  [VTO] slotGarments resolved: ["Long-Sleeved T-Shirt(tops)"]
+ LOG  [VTO] hero garment: Long-Sleeved T-Shirt category: tops imageUri: file:///var/mobile/Containers/Data/Application/23E07405-2F9D-4C11-AC98-8AFF3E9B7
+ LOG  [VTO] Reading garment image from local file system…
+ LOG  [VTO] Garment base64 length (local): 710804
+ LOG  [VTO] garmentDescription: Long-Sleeved T-Shirt, tops garment
+ LOG  [VTO] modelImageUrl is a local URI — reading as base64 on-device…
+ LOG  [VTO] model base64 length: 233980
+ LOG  [VTO] Calling proxy /api/vto/tryon… modelBase64: yes
+ LOG  [VTO:lib] proxy URL: /api/vto/tryon
+ LOG  [VTO:lib] model source: base64 (233980 chars)
+ LOG  [VTO:lib] garmentBase64 length: 710804
+ LOG  [VTO:lib] garmentDescription: Long-Sleeved T-Shirt, tops garment
+ LOG  [VTO:lib] POSTing to proxy…
+ LOG  [VTO:lib] Proxy response status: 500 
+ WARN  [VTO:lib] Proxy error payload: {"error": "Gradio error: data: null"}
+ ERROR  [VTO] callVTO threw: [VtoError: Gradio error: data: null] 
+
+Code: vto.ts
+  22 |     message: string,
+  23 |   ) {
+> 24 |     super(message);
+     |     ^
+  25 |     this.name = "VtoError";
+  26 |   }
+  27 | }
+Call Stack
+  VtoError#constructor (artifacts/fitweek/lib/vto.ts:24:5)
+  callVTO (artifacts/fitweek/lib/vto.ts:138:25)
+ ERROR  [VTO] VtoError code: VTO_ERROR message: Gradio error: data: null 
+
+Code: planner.tsx
+  628 |       console.error("[VTO] callVTO threw:", err);
+  629 |       if (err instanceof VtoError) {
+> 630 |         console.error("[VTO] VtoError code:", err.code, "message:", err.message);
+      |                      ^
+  631 |         if (err.code === "VTO_TIMEOUT") {
+  632 |           Alert.alert(
+  633 |             "Try-on is busy",
+Call Stack
+  handleGenerateVto (artifacts/fitweek/app/(tabs)/planner.tsx:630:22)
+ LOG  [VTO] ── handleGenerateVto END ──
+ LOG  [VTO] ── handleGenerateVto START ──
+ LOG  [VTO] slot.id: mopog4zc5f43f1 garmentIds: ["mopoepm375gzii"]
+ LOG  [VTO] modelImageUrl present: file:///var/mobile/Containers/Data/Application/23E07405-2F9D…
+ LOG  [VTO] slotGarments resolved: ["Active Shirt(tops)"]
+ LOG  [VTO] hero garment: Active Shirt category: tops imageUri: file:///var/mobile/Containers/Data/Application/23E07405-2F9D-4C11-AC98-8AFF3E9B7
+ LOG  [VTO] Reading garment image from local file system…
+ LOG  [VTO] Garment base64 length (local): 489108
+ LOG  [VTO] garmentDescription: Active Shirt, tops garment
+ LOG  [VTO] modelImageUrl is a local URI — reading as base64 on-device…
+ LOG  [VTO] model base64 length: 233980
+ LOG  [VTO] Calling proxy /api/vto/tryon… modelBase64: yes
+ LOG  [VTO:lib] proxy URL: /api/vto/tryon
+ LOG  [VTO:lib] model source: base64 (233980 chars)
+ LOG  [VTO:lib] garmentBase64 length: 489108
+ LOG  [VTO:lib] garmentDescription: Active Shirt, tops garment
+ LOG  [VTO:lib] POSTing to proxy…
+ LOG  [VTO:lib] Proxy response status: 500 
+ WARN  [VTO:lib] Proxy error payload: {"error": "Gradio error: data: null"}
+ ERROR  [VTO] callVTO threw: [VtoError: Gradio error: data: null] 
+
+Code: vto.ts
+  22 |     message: string,
+  23 |   ) {
+> 24 |     super(message);
+     |     ^
+  25 |     this.name = "VtoError";
+  26 |   }
+  27 | }
+Call Stack
+  VtoError#constructor (artifacts/fitweek/lib/vto.ts:24:5)
+  callVTO (artifacts/fitweek/lib/vto.ts:138:25)
+ ERROR  [VTO] VtoError code: VTO_ERROR message: Gradio error: data: null 
+
+Code: planner.tsx
+  628 |       console.error("[VTO] callVTO threw:", err);
+  629 |       if (err instanceof VtoError) {
+> 630 |         console.error("[VTO] VtoError code:", err.code, "message:", err.message);
+      |                      ^
+  631 |         if (err.code === "VTO_TIMEOUT") {
+  632 |           Alert.alert(
+  633 |             "Try-on is busy",
+Call Stack
+  handleGenerateVto (artifacts/fitweek/app/(tabs)/planner.tsx:630:22)
+ LOG  [VTO] ── handleGenerateVto END ──
