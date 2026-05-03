@@ -599,17 +599,38 @@ export default function PlannerScreen() {
 
     console.log("[VTO] garmentDescription:", hero.aiDescription ?? hero.name);
 
+    // If the model photo is a local file URI (Supabase upload failed / iOS Expo Go),
+    // read it as base64 on-device so the server doesn't have to fetch a file:// URL.
+    let modelBase64: string | undefined;
+    const isLocalModelUri =
+      !modelImageUrl.startsWith("http://") && !modelImageUrl.startsWith("https://");
+
+    if (isLocalModelUri) {
+      console.log("[VTO] modelImageUrl is a local URI — reading as base64 on-device…");
+      try {
+        modelBase64 = await FileSystem.readAsStringAsync(modelImageUrl, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        console.log("[VTO] model base64 length:", modelBase64.length);
+      } catch (err) {
+        console.error("[VTO] ERROR reading model image from local URI:", err);
+        Alert.alert("Try-on failed", "Could not read your model photo from device.");
+        return;
+      }
+    }
+
     const controller = new AbortController();
     vtoControllerRef.current = controller;
     setVtoLoading(true);
-    console.log("[VTO] Calling proxy /api/vto/tryon…");
+    console.log("[VTO] Calling proxy /api/vto/tryon… modelBase64:", modelBase64 ? "yes" : "no (using URL)");
 
     try {
       const resultUrl = await callVTO(
-        modelImageUrl,
+        isLocalModelUri ? null : modelImageUrl,
         garmentBase64,
         hero.aiDescription ?? hero.name,
         controller.signal,
+        modelBase64,
       );
       console.log("[VTO] callVTO returned resultUrl:", resultUrl ? resultUrl.slice(0, 80) : "(empty)");
       if (resultUrl) {

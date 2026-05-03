@@ -140,16 +140,19 @@ async function callTryon(data: unknown[]): Promise<string> {
  * Returns: { resultUrl: string }
  */
 router.post("/vto/tryon", async (req, res) => {
-  const { modelImageUrl, garmentBase64, garmentDescription } = req.body as {
+  const { modelImageUrl, modelBase64, garmentBase64, garmentDescription } = req.body as {
     modelImageUrl?: string;
+    modelBase64?: string;
     garmentBase64?: string;
     garmentDescription?: string;
   };
 
-  if (!modelImageUrl || !garmentBase64 || !garmentDescription) {
-    return res
-      .status(400)
-      .json({ error: "Missing: modelImageUrl, garmentBase64, garmentDescription" });
+  // Need either a model URL or base64-encoded model image
+  if (!modelImageUrl && !modelBase64) {
+    return res.status(400).json({ error: "Missing: modelImageUrl or modelBase64" });
+  }
+  if (!garmentBase64 || !garmentDescription) {
+    return res.status(400).json({ error: "Missing: garmentBase64, garmentDescription" });
   }
 
   const garmentTmp = join(tmpdir(), `fitweek_vto_garment_${randomUUID()}.jpg`);
@@ -163,16 +166,26 @@ router.post("/vto/tryon", async (req, res) => {
     const garmentBuf = await readFile(garmentTmp);
     const garmentPath = await uploadToGradio(garmentBuf, "garment.jpg", "image/jpeg");
 
-    // 3. Fetch model image and upload to Gradio
+    // 3. Obtain model image buffer — from base64 (iOS local file) or remote URL
     let modelPath: string;
     try {
-      const modelRes = await fetch(modelImageUrl);
-      if (!modelRes.ok) throw new Error(`Model fetch failed: ${modelRes.status}`);
-      const modelBuf = Buffer.from(await modelRes.arrayBuffer());
+      let modelBuf: Buffer;
+      if (modelBase64) {
+        // Client sent model as base64 (local file URI case — e.g. iOS Expo Go)
+        const rawModel = modelBase64.replace(/^data:image\/\w+;base64,/, "");
+        modelBuf = Buffer.from(rawModel, "base64");
+        req.log.info({ bytes: modelBuf.byteLength }, "Model image from base64");
+      } else {
+        // Fetch model from remote HTTPS URL (Supabase storage)
+        const modelRes = await fetch(modelImageUrl!);
+        if (!modelRes.ok) throw new Error(`Model fetch failed: ${modelRes.status}`);
+        modelBuf = Buffer.from(await modelRes.arrayBuffer());
+        req.log.info({ bytes: modelBuf.byteLength, modelImageUrl }, "Model image from URL");
+      }
       modelPath = await uploadToGradio(modelBuf, "model.jpg", "image/jpeg");
     } catch (err) {
-      req.log.error({ err }, "Failed to fetch/upload model image");
-      return res.status(502).json({ error: "Could not fetch model image from the provided URL" });
+      req.log.error({ err }, "Failed to obtain/upload model image");
+      return res.status(502).json({ error: "Could not process model image" });
     }
 
     // 4. Build payload — image editor format for model, FileData for garment

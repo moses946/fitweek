@@ -70,13 +70,14 @@ function combineSignals(external: AbortSignal | undefined, internal: AbortSignal
 /**
  * Call the server-side VTO proxy.
  *
- * @param modelImageUrl   HTTPS URL of the user's model photo (from Supabase storage)
- * @param garmentBase64   Base64-encoded garment image (from expo-file-system)
+ * @param modelImageUrl   HTTPS URL of the user's model photo, OR null if base64 is used
+ * @param modelBase64     Base64 of model photo when URL is a local file:// URI (iOS)
+ * @param garmentBase64   Base64-encoded garment image
  * @param garmentDescription  Short text description of the garment
  * @param signal          Optional AbortSignal for cancellation
  *
  * Returns the result image URL.
- * Returns "" immediately if modelImageUrl is null.
+ * Returns "" immediately if both model params are absent.
  * Throws VtoError(VTO_TIMEOUT) on timeout/abort.
  * Throws VtoError(VTO_ERROR) on any other failure.
  */
@@ -85,15 +86,16 @@ export async function callVTO(
   garmentBase64: string,
   garmentDescription: string,
   signal?: AbortSignal,
+  modelBase64?: string,
 ): Promise<string> {
-  if (!modelImageUrl) {
-    console.warn("[VTO:lib] modelImageUrl is null — returning empty.");
+  if (!modelImageUrl && !modelBase64) {
+    console.warn("[VTO:lib] No model image (URL or base64) — returning empty.");
     return "";
   }
 
   const proxyUrl = getProxyUrl();
   console.log("[VTO:lib] proxy URL:", proxyUrl);
-  console.log("[VTO:lib] modelImageUrl:", modelImageUrl.slice(0, 80) + "…");
+  console.log("[VTO:lib] model source:", modelBase64 ? `base64 (${modelBase64.length} chars)` : `URL: ${modelImageUrl?.slice(0, 80)}…`);
   console.log("[VTO:lib] garmentBase64 length:", garmentBase64.length);
   console.log("[VTO:lib] garmentDescription:", garmentDescription);
 
@@ -104,12 +106,19 @@ export async function callVTO(
   }, VTO_TIMEOUT_MS);
   const combined = combineSignals(signal, internalController.signal);
 
+  const payload: Record<string, string> = { garmentBase64, garmentDescription };
+  if (modelBase64) {
+    payload.modelBase64 = modelBase64;
+  } else if (modelImageUrl) {
+    payload.modelImageUrl = modelImageUrl;
+  }
+
   try {
     console.log("[VTO:lib] POSTing to proxy…");
     const res = await fetch(proxyUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ modelImageUrl, garmentBase64, garmentDescription }),
+      body: JSON.stringify(payload),
       signal: combined,
     });
 
