@@ -134,7 +134,7 @@ export async function callVTO(
         const text = await res.text().catch(() => "(unreadable body)");
         console.error("[VTO:lib] Non-JSON error body:", text);
       }
-      console.error("[VTO:lib] Proxy error payload:", errBody);
+      console.warn("[VTO:lib] Proxy error payload:", errBody);
       throw new VtoError("VTO_ERROR", errBody.error ?? `Proxy returned ${res.status}`);
     }
 

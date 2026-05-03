@@ -203,7 +203,20 @@ router.post("/vto/tryon", async (req, res) => {
       42,                     // seed
     ];
 
-    const resultUrl = await callTryon(payload);
+    // Retry once if Gradio returns data: null (Space is cold-starting or at capacity)
+    let resultUrl: string;
+    try {
+      resultUrl = await callTryon(payload);
+    } catch (firstErr) {
+      const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+      if (msg.includes("data: null")) {
+        req.log.warn({ msg }, "Gradio returned data: null — waiting 30s and retrying");
+        await new Promise((r) => setTimeout(r, 30_000));
+        resultUrl = await callTryon(payload);
+      } else {
+        throw firstErr;
+      }
+    }
     req.log.info({ resultUrl }, "VTO complete — downloading result image");
 
     // Download the result image immediately so the client never depends on

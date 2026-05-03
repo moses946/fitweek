@@ -184,7 +184,7 @@ export default function PlanWeekScreen() {
           // Silent fail — VTO will be available to generate manually
         }
 
-        await new Promise<void>((res) => setTimeout(res, 1500));
+        await new Promise<void>((res) => setTimeout(res, 5_000));
       }
       setVtoLabel(null);
     },
@@ -235,7 +235,11 @@ export default function PlanWeekScreen() {
       router.back();
 
       if (modelImageUrl && writtenSlots.length > 0) {
-        runBackgroundVTO(writtenSlots, modelImageUrl).catch(() => {});
+        // Give the Gradio Space 20s to wake up before firing the first VTO request.
+        // Firing immediately when the Space is cold causes instant "data: null" errors.
+        setTimeout(() => {
+          runBackgroundVTO(writtenSlots, modelImageUrl).catch(() => {});
+        }, 20_000);
       }
     } catch {
       Alert.alert("Curating failed", "Could not build your week. Please try again.");
