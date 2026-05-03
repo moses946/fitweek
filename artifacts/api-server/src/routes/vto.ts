@@ -7,6 +7,13 @@ import { randomUUID } from "crypto";
 const router = Router();
 const VTO_SPACE = "https://yisol-idm-vton.hf.space";
 
+const GRADIO_DATA_NULL = "GRADIO_DATA_NULL";
+
+function isDataNullError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.startsWith(GRADIO_DATA_NULL) || msg.includes("stream ended without a result");
+}
+
 /**
  * Try Gradio 4 upload path first (/gradio_api/upload), then fall back to v3 (/upload).
  */
@@ -15,7 +22,6 @@ async function uploadToGradio(buf: Buffer, filename: string, mime: string): Prom
   const form = new FormData();
   form.append("files", blob, filename);
 
-  // Try Gradio 4 API first
   for (const path of ["/gradio_api/upload", "/upload"]) {
     try {
       const res = await fetch(`${VTO_SPACE}${path}`, { method: "POST", body: form });
@@ -43,6 +49,9 @@ function makeFileData(path: string) {
 /**
  * Call the Gradio Space to run the tryon function.
  * Tries Gradio 4 (/gradio_api/call/tryon) then Gradio 3 (/call/tryon).
+ *
+ * Throws an error starting with GRADIO_DATA_NULL when the Space returns
+ * `data: null` — which means it is cold-starting or at capacity.
  */
 async function callTryon(data: unknown[]): Promise<string> {
   const endpoints = ["/gradio_api/call/tryon", "/call/tryon"];
@@ -93,17 +102,43 @@ async function callTryon(data: unknown[]): Promise<string> {
         if (line === "event: complete") {
           const dataLine = lines[i + 1] ?? "";
           if (dataLine.startsWith("data: ")) {
+            const raw = dataLine.slice(6).trim();
+
+            // "data: null" — Space is cold-starting or at capacity.
+            // Throw a typed sentinel so the caller can retry with backoff.
+            if (raw === "null" || raw === "") {
+              errorMsg = `${GRADIO_DATA_NULL}: Space returned null — cold-start or at capacity`;
+              break;
+            }
+
             try {
-              const parsed = JSON.parse(dataLine.slice(6));
+              const parsed = JSON.parse(raw);
+
+              // Guard against a null or non-array/non-object parse result
+              if (parsed === null || parsed === undefined) {
+                errorMsg = `${GRADIO_DATA_NULL}: Parsed data is null`;
+                break;
+              }
+
               const items: Array<{ path?: string; url?: string }> = Array.isArray(parsed)
                 ? parsed
                 : [parsed];
               const first = items[0];
+
+              if (!first) {
+                errorMsg = `${GRADIO_DATA_NULL}: Empty result array from Space`;
+                break;
+              }
+
               resultUrl =
                 first?.url ??
                 (first?.path ? `${VTO_SPACE}/file=${first.path}` : null);
+
+              if (!resultUrl) {
+                errorMsg = "VTO result item had no url or path";
+              }
             } catch {
-              errorMsg = "Failed to parse VTO result";
+              errorMsg = "Failed to parse VTO result JSON";
             }
           }
           break;
@@ -120,8 +155,14 @@ async function callTryon(data: unknown[]): Promise<string> {
     }
 
     if (resultUrl) return resultUrl;
+
+    // Propagate typed sentinel immediately so the route can retry
+    if (errorMsg?.startsWith(GRADIO_DATA_NULL)) {
+      throw new Error(errorMsg);
+    }
+
     if (errorMsg) throw new Error(errorMsg);
-    // If we get here without a result, try the next endpoint
+    // No result on this endpoint — try the next one
   }
 
   throw new Error("VTO stream ended without a result on all endpoints");
@@ -147,7 +188,6 @@ router.post("/vto/tryon", async (req, res) => {
     garmentDescription?: string;
   };
 
-  // Need either a model URL or base64-encoded model image
   if (!modelImageUrl && !modelBase64) {
     return res.status(400).json({ error: "Missing: modelImageUrl or modelBase64" });
   }
@@ -171,12 +211,10 @@ router.post("/vto/tryon", async (req, res) => {
     try {
       let modelBuf: Buffer;
       if (modelBase64) {
-        // Client sent model as base64 (local file URI case — e.g. iOS Expo Go)
         const rawModel = modelBase64.replace(/^data:image\/\w+;base64,/, "");
         modelBuf = Buffer.from(rawModel, "base64");
         req.log.info({ bytes: modelBuf.byteLength }, "Model image from base64");
       } else {
-        // Fetch model from remote HTTPS URL (Supabase storage)
         const modelRes = await fetch(modelImageUrl!);
         if (!modelRes.ok) throw new Error(`Model fetch failed: ${modelRes.status}`);
         modelBuf = Buffer.from(await modelRes.arrayBuffer());
@@ -188,39 +226,45 @@ router.post("/vto/tryon", async (req, res) => {
       return res.status(502).json({ error: "Could not process model image" });
     }
 
-    // 4. Build payload — image editor format for model, FileData for garment
+    // 4. Build Gradio payload
     const modelFileData = makeFileData(modelPath);
     const garmentFileData = makeFileData(garmentPath);
 
     const payload = [
-      // Gradio ImageEditor component: { background, layers, composite }
       { background: modelFileData, layers: [], composite: null },
-      garmentFileData,        // garment image
-      garmentDescription,     // text description
-      true,                   // is_checked — auto-masking
-      true,                   // is_checked_crop
-      30,                     // denoise_steps
-      42,                     // seed
+      garmentFileData,
+      garmentDescription,
+      true,   // is_checked — auto-masking
+      true,   // is_checked_crop
+      30,     // denoise_steps
+      42,     // seed
     ];
 
-    // Retry once if Gradio returns data: null (Space is cold-starting or at capacity)
-    let resultUrl: string;
-    try {
-      resultUrl = await callTryon(payload);
-    } catch (firstErr) {
-      const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
-      if (msg.includes("data: null")) {
-        req.log.warn({ msg }, "Gradio returned data: null — waiting 30s and retrying");
-        await new Promise((r) => setTimeout(r, 30_000));
+    // 5. Retry up to 3 times when the Space is cold/null (30 s between attempts)
+    const MAX_ATTEMPTS = 3;
+    const RETRY_DELAY_MS = 30_000;
+    let resultUrl = "";
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
         resultUrl = await callTryon(payload);
-      } else {
-        throw firstErr;
+        break; // success
+      } catch (err) {
+        if (isDataNullError(err) && attempt < MAX_ATTEMPTS) {
+          req.log.warn(
+            { attempt, maxAttempts: MAX_ATTEMPTS },
+            `Gradio data:null — Space is cold. Waiting ${RETRY_DELAY_MS / 1000}s before retry ${attempt + 1}/${MAX_ATTEMPTS}`,
+          );
+          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+          continue;
+        }
+        throw err; // non-retriable or exhausted
       }
     }
+
     req.log.info({ resultUrl }, "VTO complete — downloading result image");
 
-    // Download the result image immediately so the client never depends on
-    // a Gradio temp-file URL (which expires within minutes).
+    // 6. Download result immediately so the client never depends on an expiring Gradio URL
     let resultBase64: string | null = null;
     try {
       const resultImageRes = await fetch(resultUrl);
@@ -229,7 +273,7 @@ router.post("/vto/tryon", async (req, res) => {
         resultBase64 = resultBuf.toString("base64");
         req.log.info({ bytes: resultBuf.byteLength }, "VTO result image downloaded");
       } else {
-        req.log.warn({ status: resultImageRes.status }, "Could not download VTO result image — returning URL only");
+        req.log.warn({ status: resultImageRes.status }, "Could not download VTO result — returning URL only");
       }
     } catch (err) {
       req.log.warn({ err }, "VTO result download failed — returning URL only");
