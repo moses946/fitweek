@@ -1,0 +1,522 @@
+import { Feather } from "@expo/vector-icons";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { BackCard, CARD_HEIGHT, CARD_WIDTH, SwipeCard } from "@/components/SwipeCard";
+import brandColors from "@/constants/colors";
+import { useAuth } from "@/contexts/AuthContext";
+import { useGarments } from "@/contexts/GarmentContext";
+import { useOutfitSlots } from "@/contexts/OutfitSlotContext";
+import { useWeather } from "@/contexts/WeatherContext";
+import { useColors } from "@/hooks/useColors";
+import { interleaveByCategory } from "@/lib/suggestionFilter";
+import type { Garment, OutfitSlot } from "@/lib/types";
+import { callVTO, selectHeroGarment } from "@/lib/vto";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const LOW_DECK_THRESHOLD = 3;
+const MIN_LIKED = 3;
+
+function toISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function getWeekDays(): Date[] {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return d;
+  });
+}
+
+function getProxyBase(): string {
+  if (typeof window !== "undefined") return "";
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  return domain ? `https://${domain}` : "http://localhost:8080";
+}
+
+async function readImageAsBase64(imageUri: string): Promise<string> {
+  if (imageUri.startsWith("http")) {
+    const imgRes = await fetch(imageUri);
+    if (!imgRes.ok) throw new Error(`Fetch failed: ${imgRes.status}`);
+    const arrayBuf = await imgRes.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuf);
+    let binary = "";
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]!);
+    return btoa(binary);
+  }
+  return FileSystem.readAsStringAsync(imageUri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+}
+
+function buildGarmentDesc(hero: Garment): string {
+  if (hero.aiDescription) return hero.aiDescription;
+  const nameLower = hero.name.toLowerCase();
+  if (nameLower === "other" || nameLower === hero.category.toLowerCase()) {
+    return `${hero.category} garment`;
+  }
+  return `${hero.name}, ${hero.category} garment`;
+}
+
+export default function PlanWeekScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const colors = useColors();
+
+  const { garments } = useGarments();
+  const { slots, bulkWriteDrafts, updateSlotVtoImage } = useOutfitSlots();
+  const { forecast } = useWeather();
+  const { modelImageUrl } = useAuth();
+
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [liveDeck, setLiveDeck] = useState<Garment[]>([]);
+  const [sessionPool, setSessionPool] = useState<Garment[]>([]);
+  const [curating, setCurating] = useState(false);
+  const [vtoLabel, setVtoLabel] = useState<string | null>(null);
+
+  const liveDeckRef = useRef(liveDeck);
+  const sessionPoolRef = useRef(sessionPool);
+  liveDeckRef.current = liveDeck;
+  sessionPoolRef.current = sessionPool;
+
+  useEffect(() => {
+    const clean = garments.filter((g) => g.status === "clean" && !g.deletedAt);
+    setLiveDeck(interleaveByCategory(clean));
+  }, []);
+
+  useEffect(() => {
+    if (liveDeck.length <= LOW_DECK_THRESHOLD && sessionPool.length > 0) {
+      setLiveDeck((prev) => [...prev, ...sessionPool]);
+      setSessionPool([]);
+    }
+  }, [liveDeck.length, sessionPool.length]);
+
+  const advanceDeck = useCallback((wasSkipped: boolean, garment: Garment) => {
+    const newPool = wasSkipped
+      ? [...sessionPoolRef.current, garment]
+      : sessionPoolRef.current;
+    setSessionPool(newPool);
+    setLiveDeck((prev) => {
+      const next = prev.slice(1);
+      if (next.length <= LOW_DECK_THRESHOLD && newPool.length > 0) {
+        setSessionPool([]);
+        return [...next, ...newPool];
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSwipeRight = useCallback((garment: Garment) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setLikedIds((prev) => new Set([...prev, garment.id]));
+    advanceDeck(false, garment);
+  }, [advanceDeck]);
+
+  const handleSwipeLeft = useCallback((garment: Garment) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    advanceDeck(true, garment);
+  }, [advanceDeck]);
+
+  const runBackgroundVTO = useCallback(
+    async (writtenSlots: OutfitSlot[], modelUrl: string) => {
+      const isLocal = !modelUrl.startsWith("http://") && !modelUrl.startsWith("https://");
+      let modelBase64: string | undefined;
+      if (isLocal) {
+        try {
+          modelBase64 = await FileSystem.readAsStringAsync(modelUrl, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+        } catch {
+          return;
+        }
+      }
+
+      const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      for (let i = 0; i < writtenSlots.length; i++) {
+        const slot = writtenSlots[i]!;
+        const dayName = days[i] ?? `Day ${i + 1}`;
+        setVtoLabel(`Creating look for ${dayName}…`);
+
+        const slotGarments = slot.garmentIds
+          .map((id) => garments.find((g) => g.id === id))
+          .filter((g): g is Garment => g != null && !g.deletedAt);
+
+        const hero = selectHeroGarment(slotGarments);
+        if (!hero) continue;
+
+        try {
+          const garmentBase64 = await readImageAsBase64(hero.imageUri);
+          const garmentDesc = buildGarmentDesc(hero);
+
+          const resultUrl = await callVTO(
+            isLocal ? null : modelUrl,
+            garmentBase64,
+            garmentDesc,
+            undefined,
+            modelBase64,
+          );
+          if (resultUrl) {
+            await updateSlotVtoImage(slot.id, resultUrl);
+          }
+        } catch {
+          // Silent fail — VTO will be available to generate manually
+        }
+
+        await new Promise<void>((res) => setTimeout(res, 1500));
+      }
+      setVtoLabel(null);
+    },
+    [garments, updateSlotVtoImage],
+  );
+
+  const handleCurateWeek = useCallback(async () => {
+    const likedList = garments.filter((g) => likedIds.has(g.id));
+    const poolForSuggest = likedList.length >= MIN_LIKED
+      ? likedList
+      : garments.filter((g) => g.status === "clean" && !g.deletedAt);
+
+    if (!poolForSuggest.length) {
+      Alert.alert("No garments", "Add some clean garments to your wardrobe first.");
+      return;
+    }
+
+    const weekDates = getWeekDays()
+      .map(toISODate)
+      .filter((d) => {
+        const s = slots.find((sl) => sl.date === d);
+        return !s || s.status !== "confirmed";
+      });
+
+    if (!weekDates.length) {
+      Alert.alert("All set!", "You already have confirmed outfits for every day this week.");
+      router.back();
+      return;
+    }
+
+    setCurating(true);
+    try {
+      const res = await fetch(`${getProxyBase()}/api/outfit/suggest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dates: weekDates,
+          garments: poolForSuggest,
+          forecasts: forecast ?? [],
+        }),
+      });
+      if (!res.ok) throw new Error("Suggest failed");
+      const { suggestions } = (await res.json()) as { suggestions: Record<string, string[]> };
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const writtenSlots = await bulkWriteDrafts(suggestions);
+
+      router.back();
+
+      if (modelImageUrl && writtenSlots.length > 0) {
+        runBackgroundVTO(writtenSlots, modelImageUrl).catch(() => {});
+      }
+    } catch {
+      Alert.alert("Curating failed", "Could not build your week. Please try again.");
+    } finally {
+      setCurating(false);
+    }
+  }, [garments, likedIds, slots, forecast, bulkWriteDrafts, router, modelImageUrl, runBackgroundVTO]);
+
+  const likedCount = likedIds.size;
+  const deckExhausted = liveDeck.length === 0;
+  const canCurate = likedCount >= MIN_LIKED || deckExhausted;
+  const currentCard = liveDeck[0];
+  const likedGarments = garments.filter((g) => likedIds.has(g.id));
+
+  return (
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+          paddingTop: Platform.OS === "web" ? 67 : insets.top,
+        },
+      ]}
+    >
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable onPress={() => router.back()} hitSlop={12}>
+          <Feather name="x" size={22} color={colors.foreground} />
+        </Pressable>
+        <View style={styles.headerCenter}>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+            Pick Your Favourites
+          </Text>
+          <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
+            Swipe right on pieces you'd love this week
+          </Text>
+        </View>
+        <View style={styles.likedBadge}>
+          <LinearGradient
+            colors={brandColors.gradientPrimary}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.likedBadgeGradient}
+          >
+            <Text style={styles.likedBadgeText}>{likedCount}</Text>
+          </LinearGradient>
+          <Text style={[styles.likedBadgeLabel, { color: colors.mutedForeground }]}>liked</Text>
+        </View>
+      </View>
+
+      {/* Hint row */}
+      <View style={styles.hintRow}>
+        <Text style={[styles.hintText, { color: colors.statusWorn ?? "#64748B" }]}>← Skip</Text>
+        <Text style={[styles.hintSub, { color: colors.mutedForeground }]}>
+          {likedCount > 0
+            ? `${likedCount} piece${likedCount !== 1 ? "s" : ""} liked`
+            : "Swipe right to like"}
+        </Text>
+        <Text style={[styles.hintText, { color: "#10B981" }]}>Like →</Text>
+      </View>
+
+      {/* Card deck */}
+      <View style={styles.deckArea}>
+        {deckExhausted ? (
+          <View style={styles.emptyDeck}>
+            <View style={[styles.emptyIconWrap, { backgroundColor: colors.muted }]}>
+              <Feather name="check-circle" size={40} color={colors.primary} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+              You've seen everything
+            </Text>
+            <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
+              {likedCount > 0
+                ? `${likedCount} piece${likedCount !== 1 ? "s" : ""} ready — tap Curate My Week below.`
+                : "No pieces liked — we'll use your full wardrobe."}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.stack}>
+            {liveDeck[2] && (
+              <BackCard garment={liveDeck[2]} scale={0.90} translateY={20} />
+            )}
+            {liveDeck[1] && (
+              <BackCard garment={liveDeck[1]} scale={0.94} translateY={10} />
+            )}
+            {currentCard && (
+              <SwipeCard
+                key={currentCard.id}
+                garment={currentCard}
+                onSwipeRight={() => handleSwipeRight(currentCard)}
+                onSwipeLeft={() => handleSwipeLeft(currentCard)}
+              />
+            )}
+          </View>
+        )}
+      </View>
+
+      {/* Liked garment strip */}
+      {likedGarments.length > 0 && (
+        <View style={styles.likedStrip}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.likedStripInner}
+          >
+            {likedGarments.map((g) => (
+              <Image
+                key={g.id}
+                source={{ uri: g.imageUri }}
+                style={[styles.likedThumb, { borderColor: colors.primary }]}
+                contentFit="cover"
+              />
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* VTO progress label */}
+      {vtoLabel && (
+        <View style={styles.vtoRow}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={[styles.vtoLabel, { color: colors.mutedForeground }]}>{vtoLabel}</Text>
+        </View>
+      )}
+
+      {/* Bottom actions */}
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 }]}>
+        {canCurate ? (
+          <Pressable
+            onPress={handleCurateWeek}
+            disabled={curating}
+            style={({ pressed }) => [styles.curateBtn, { opacity: pressed || curating ? 0.8 : 1 }]}
+          >
+            <LinearGradient
+              colors={brandColors.gradientPrimary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.curateBtnGradient}
+            >
+              {curating ? (
+                <>
+                  <ActivityIndicator size="small" color="#FFF" />
+                  <Text style={styles.curateBtnLabel}>Building your week…</Text>
+                </>
+              ) : (
+                <>
+                  <Feather name="zap" size={16} color="#FFF" />
+                  <Text style={styles.curateBtnLabel}>Curate My Week</Text>
+                </>
+              )}
+            </LinearGradient>
+          </Pressable>
+        ) : (
+          <View style={styles.curateHint}>
+            <Text style={[styles.curateHintText, { color: colors.mutedForeground }]}>
+              Like {MIN_LIKED - likedCount} more piece{MIN_LIKED - likedCount !== 1 ? "s" : ""} to curate your week
+            </Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  headerCenter: { flex: 1, gap: 2 },
+  headerTitle: { fontSize: 16, fontFamily: "Poppins_600SemiBold" },
+  headerSub: { fontSize: 12, fontFamily: "Poppins_400Regular" },
+  likedBadge: { alignItems: "center", gap: 2 },
+  likedBadgeGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  likedBadgeText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontFamily: "Poppins_700Bold",
+  },
+  likedBadgeLabel: { fontSize: 10, fontFamily: "Poppins_400Regular" },
+  hintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 28,
+    paddingBottom: 10,
+  },
+  hintText: { fontSize: 13, fontFamily: "Poppins_600SemiBold" },
+  hintSub: { fontSize: 11, fontFamily: "Poppins_400Regular" },
+  deckArea: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stack: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT + 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyDeck: {
+    alignItems: "center",
+    paddingHorizontal: 40,
+    gap: 14,
+  },
+  emptyIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  emptyTitle: { fontSize: 20, fontFamily: "Poppins_700Bold", textAlign: "center" },
+  emptyBody: {
+    fontSize: 14,
+    fontFamily: "Poppins_400Regular",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  likedStrip: {
+    height: 64,
+    borderTopWidth: 1,
+    borderTopColor: "#E4E0F5",
+  },
+  likedStripInner: {
+    paddingHorizontal: 16,
+    alignItems: "center",
+    gap: 8,
+  },
+  likedThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+    borderWidth: 2,
+  },
+  vtoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 8,
+  },
+  vtoLabel: { fontSize: 12, fontFamily: "Poppins_400Regular" },
+  bottomBar: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E4E0F5",
+  },
+  curateBtn: { borderRadius: 16, overflow: "hidden" },
+  curateBtnGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 16,
+  },
+  curateBtnLabel: {
+    color: "#FFF",
+    fontSize: 15,
+    fontFamily: "Poppins_600SemiBold",
+  },
+  curateHint: {
+    alignItems: "center",
+    paddingVertical: 16,
+  },
+  curateHintText: {
+    fontSize: 13,
+    fontFamily: "Poppins_400Regular",
+    textAlign: "center",
+  },
+});

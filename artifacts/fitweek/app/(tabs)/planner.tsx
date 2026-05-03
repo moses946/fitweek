@@ -464,45 +464,23 @@ export default function PlannerScreen() {
     }
   };
 
-  const handlePlanWeek = async () => {
-    const unplannedDates = weekDays
+  const handlePlanWeek = () => {
+    const allConfirmed = weekDays
       .map(toISODate)
-      .filter((d) => {
-        const s = slotByDate.get(d);
-        return !s || s.status !== "confirmed";
-      });
-
-    if (!unplannedDates.length) {
+      .every((d) => slotByDate.get(d)?.status === "confirmed");
+    if (allConfirmed) {
       Alert.alert("All set!", "You have confirmed outfits for every day this week.");
       return;
     }
-    if (!garments.filter((g) => g.status === "clean" && !g.deletedAt).length) {
-      Alert.alert("No garments", "Add some clean garments to your closet first.");
+    const cleanCount = garments.filter((g) => g.status === "clean" && !g.deletedAt).length;
+    if (cleanCount < 10) {
+      Alert.alert(
+        "More clothes needed",
+        `Add at least 10 clean items to plan your week (you have ${cleanCount}). Head to your closet to add more.`,
+      );
       return;
     }
-
-    setWeekSuggesting(true);
-    try {
-      const res = await fetch(`${getProxyBase()}/api/outfit/suggest`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dates: unplannedDates,
-          garments,
-          forecasts: forecast ?? [],
-        }),
-      });
-      if (!res.ok) throw new Error("Suggest failed");
-      const { suggestions } = await res.json() as { suggestions: Record<string, string[]> };
-      await bulkWriteDrafts(suggestions);
-      // Navigate to the first unplanned day so user can start swiping
-      const firstDate = unplannedDates[0]!;
-      router.push({ pathname: "/(swipe)/[date]", params: { date: firstDate } });
-    } catch {
-      Alert.alert("Suggestion failed", "Could not generate suggestions. Try again.");
-    } finally {
-      setWeekSuggesting(false);
-    }
+    router.push("/(swipe)/plan-week");
   };
 
   const handleEditSlot = (slot: OutfitSlot) => {
@@ -758,8 +736,7 @@ export default function PlannerScreen() {
       {!showLocationPrompt && uiMode === "idle" && (
         <Pressable
           onPress={handlePlanWeek}
-          disabled={weekSuggesting}
-          style={({ pressed }) => [styles.planWeekBtn, { opacity: pressed || weekSuggesting ? 0.7 : 1 }]}
+          style={({ pressed }) => [styles.planWeekBtn, { opacity: pressed ? 0.7 : 1 }]}
         >
           <LinearGradient
             colors={brandColors.gradientPrimary}
@@ -767,17 +744,8 @@ export default function PlannerScreen() {
             end={{ x: 1, y: 0 }}
             style={styles.planWeekGradient}
           >
-            {weekSuggesting ? (
-              <>
-                <ActivityIndicator size="small" color="#FFF" />
-                <Text style={styles.planWeekLabel}>Suggesting outfits…</Text>
-              </>
-            ) : (
-              <>
-                <Feather name="zap" size={14} color="#FFF" />
-                <Text style={styles.planWeekLabel}>Plan my week</Text>
-              </>
-            )}
+            <Feather name="zap" size={14} color="#FFF" />
+            <Text style={styles.planWeekLabel}>Plan my week</Text>
           </LinearGradient>
         </Pressable>
       )}

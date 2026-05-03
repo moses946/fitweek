@@ -39,8 +39,8 @@ interface OutfitSlotContextValue {
   updateSlotVtoImage: (slotId: string, vtoImageUrl: string) => Promise<void>;
   /** IDs of garments locked into confirmed slots (excluding a given date) */
   getConfirmedGarmentIds: (excludeDate?: string) => Set<string>;
-  /** Write draft slots for multiple dates at once (for weekly AI suggest) */
-  bulkWriteDrafts: (suggestions: Record<string, string[]>) => Promise<void>;
+  /** Write draft slots for multiple dates at once (for weekly AI suggest). Returns the written slots. */
+  bulkWriteDrafts: (suggestions: Record<string, string[]>) => Promise<OutfitSlot[]>;
 }
 
 const OutfitSlotContext = createContext<OutfitSlotContextValue | null>(null);
@@ -143,14 +143,15 @@ export function OutfitSlotProvider({ children }: { children: React.ReactNode }) 
   );
 
   const bulkWriteDrafts = useCallback(
-    async (suggestions: Record<string, string[]>) => {
+    async (suggestions: Record<string, string[]>): Promise<OutfitSlot[]> => {
       let next = [...slots];
+      const written: OutfitSlot[] = [];
       for (const [date, garmentIds] of Object.entries(suggestions)) {
         if (!garmentIds.length) continue;
         // Don't overwrite already-confirmed slots
         const existing = next.find((s) => s.date === date);
         if (existing?.status === "confirmed") continue;
-        // Replace or create draft
+        // Replace or create draft — preserve existing vtoImageUrl so background VTO isn't wiped
         const draft: OutfitSlot = {
           id: existing?.id ?? (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)),
           date,
@@ -158,12 +159,15 @@ export function OutfitSlotProvider({ children }: { children: React.ReactNode }) 
           status: "draft",
           name: null,
           createdAt: existing?.createdAt ?? new Date().toISOString(),
+          vtoImageUrl: existing?.vtoImageUrl ?? null,
         };
         next = existing
           ? next.map((s) => (s.date === date ? draft : s))
           : [draft, ...next];
+        written.push(draft);
       }
       await persist(next);
+      return written;
     },
     [slots, persist],
   );
