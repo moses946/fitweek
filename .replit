@@ -30,3 +30,12 @@ externalPort = 80
 [[ports]]
 localPort = 24937
 externalPort = 3000
+
+[nix]
+channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+EXPO_PUBLIC_SUPABASE_URL = "https://szbfownxvggwsjettckb.supabase.co"
+EXPO_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_sDAlcMdzQj1NXdwu72NNqw_McM2rJvx"
