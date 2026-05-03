@@ -134,8 +134,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Ignore signOut errors
     }
-    await AsyncStorage.multiRemove([ONBOARDING_KEY, MODEL_URL_KEY]);
-    setHasCompletedOnboarding(false);
+    // Keep ONBOARDING_KEY so returning users skip onboarding on next login.
+    // Only clear the model URL so stale Supabase storage links don't linger.
+    await AsyncStorage.removeItem(MODEL_URL_KEY);
     setModelImageUrl(null);
   };
 

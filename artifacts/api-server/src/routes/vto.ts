@@ -8,6 +8,23 @@ const router = Router();
 const VTO_SPACE = "https://yisol-idm-vton.hf.space";
 
 /**
+ * Upload a Buffer to the Gradio Space's /upload endpoint.
+ * Returns the Gradio-internal path string.
+ */
+async function uploadToGradio(buf: Buffer, filename: string, mime: string): Promise<string> {
+  const blob = new Blob([buf], { type: mime });
+  const form = new FormData();
+  form.append("files", blob, filename);
+
+  const res = await fetch(`${VTO_SPACE}/upload`, { method: "POST", body: form });
+  if (!res.ok) throw new Error(`Gradio upload failed: ${res.status}`);
+  const paths = (await res.json()) as string[];
+  const path = paths[0];
+  if (!path) throw new Error("No path from Gradio upload");
+  return path;
+}
+
+/**
  * POST /api/vto/tryon
  *
  * Proxy for the IDM-VTON Gradio Space — avoids CORS restrictions on the client.
@@ -32,37 +49,33 @@ router.post("/vto/tryon", async (req, res) => {
       .json({ error: "Missing: modelImageUrl, garmentBase64, garmentDescription" });
   }
 
-  const tmpPath = join(tmpdir(), `fitweek_vto_${randomUUID()}.jpg`);
+  const garmentTmp = join(tmpdir(), `fitweek_vto_garment_${randomUUID()}.jpg`);
 
   try {
     // 1. Decode garment base64 → temp file
     const raw = garmentBase64.replace(/^data:image\/\w+;base64,/, "");
-    await writeFile(tmpPath, Buffer.from(raw, "base64"));
+    await writeFile(garmentTmp, Buffer.from(raw, "base64"));
 
-    // 2. Upload garment to the Gradio Space
-    const garmentBuf = await readFile(tmpPath);
-    const garmentBlob = new Blob([garmentBuf], { type: "image/jpeg" });
-    const uploadForm = new FormData();
-    uploadForm.append("files", garmentBlob, "garment.jpg");
+    // 2. Upload garment to Gradio
+    const garmentBuf = await readFile(garmentTmp);
+    const garmentPath = await uploadToGradio(garmentBuf, "garment.jpg", "image/jpeg");
 
-    const uploadRes = await fetch(`${VTO_SPACE}/upload`, {
-      method: "POST",
-      body: uploadForm,
-    });
-
-    if (!uploadRes.ok) {
-      req.log.error({ status: uploadRes.status }, "Gradio upload failed");
-      return res.status(502).json({ error: `Gradio upload failed: ${uploadRes.status}` });
+    // 3. Fetch model image from URL and upload to Gradio
+    //    (Gradio cannot fetch external URLs directly — it needs files on its own server)
+    let modelPath: string;
+    try {
+      const modelRes = await fetch(modelImageUrl);
+      if (!modelRes.ok) throw new Error(`Model fetch failed: ${modelRes.status}`);
+      const modelBuf = Buffer.from(await modelRes.arrayBuffer());
+      modelPath = await uploadToGradio(modelBuf, "model.jpg", "image/jpeg");
+    } catch (err) {
+      req.log.error({ err }, "Failed to fetch/upload model image");
+      return res.status(502).json({ error: "Could not fetch model image from the provided URL" });
     }
 
-    const uploadedPaths = (await uploadRes.json()) as string[];
-    const garmentPath = uploadedPaths[0];
-    if (!garmentPath) return res.status(502).json({ error: "No path from Gradio upload" });
-
-    // 3. Build FileData objects for model + garment
+    // 4. Build FileData objects for model + garment
     const modelFileData = {
-      path: modelImageUrl,
-      url: modelImageUrl,
+      path: modelPath,
       meta: { _type: "gradio.FileData" },
     };
     const garmentFileData = {
@@ -70,7 +83,7 @@ router.post("/vto/tryon", async (req, res) => {
       meta: { _type: "gradio.FileData" },
     };
 
-    // 4. POST /call/tryon to start the inference job
+    // 5. POST /call/tryon to start the inference job
     const callRes = await fetch(`${VTO_SPACE}/call/tryon`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -79,10 +92,10 @@ router.post("/vto/tryon", async (req, res) => {
           { background: modelFileData, layers: [], composite: null },
           garmentFileData,
           garmentDescription,
-          true, // is_checked — auto-masking
-          true, // is_checked_crop
-          30,   // denoise_steps
-          42,   // seed
+          true,  // is_checked — auto-masking
+          true,  // is_checked_crop
+          30,    // denoise_steps
+          42,    // seed
         ],
       }),
     });
@@ -96,7 +109,7 @@ router.post("/vto/tryon", async (req, res) => {
     const { event_id } = (await callRes.json()) as { event_id: string };
     if (!event_id) return res.status(502).json({ error: "No event_id from Gradio" });
 
-    // 5. Stream SSE from Gradio until event: complete
+    // 6. Stream SSE from Gradio until event: complete
     const streamRes = await fetch(`${VTO_SPACE}/call/tryon/${event_id}`);
     if (!streamRes.ok) {
       return res
@@ -151,7 +164,7 @@ router.post("/vto/tryon", async (req, res) => {
     req.log.error({ err }, "VTO proxy error");
     return res.status(500).json({ error: "Internal VTO proxy error" });
   } finally {
-    unlink(tmpPath).catch(() => {});
+    unlink(garmentTmp).catch(() => {});
   }
 });
 
