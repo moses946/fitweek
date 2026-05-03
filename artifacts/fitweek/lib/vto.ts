@@ -86,33 +86,62 @@ export async function callVTO(
   garmentDescription: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  if (!modelImageUrl) return "";
+  if (!modelImageUrl) {
+    console.warn("[VTO:lib] modelImageUrl is null — returning empty.");
+    return "";
+  }
+
+  const proxyUrl = getProxyUrl();
+  console.log("[VTO:lib] proxy URL:", proxyUrl);
+  console.log("[VTO:lib] modelImageUrl:", modelImageUrl.slice(0, 80) + "…");
+  console.log("[VTO:lib] garmentBase64 length:", garmentBase64.length);
+  console.log("[VTO:lib] garmentDescription:", garmentDescription);
 
   const internalController = new AbortController();
-  const timer = setTimeout(() => internalController.abort(), VTO_TIMEOUT_MS);
+  const timer = setTimeout(() => {
+    console.warn("[VTO:lib] Internal timeout fired after", VTO_TIMEOUT_MS, "ms — aborting.");
+    internalController.abort();
+  }, VTO_TIMEOUT_MS);
   const combined = combineSignals(signal, internalController.signal);
 
   try {
-    const res = await fetch(getProxyUrl(), {
+    console.log("[VTO:lib] POSTing to proxy…");
+    const res = await fetch(proxyUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ modelImageUrl, garmentBase64, garmentDescription }),
       signal: combined,
     });
 
+    console.log("[VTO:lib] Proxy response status:", res.status, res.statusText);
+
     if (!res.ok) {
-      const err = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new VtoError("VTO_ERROR", err.error ?? `Proxy returned ${res.status}`);
+      let errBody: { error?: string } = {};
+      try {
+        errBody = (await res.json()) as { error?: string };
+      } catch {
+        const text = await res.text().catch(() => "(unreadable body)");
+        console.error("[VTO:lib] Non-JSON error body:", text);
+      }
+      console.error("[VTO:lib] Proxy error payload:", errBody);
+      throw new VtoError("VTO_ERROR", errBody.error ?? `Proxy returned ${res.status}`);
     }
 
-    const { resultUrl } = (await res.json()) as { resultUrl?: string };
-    if (!resultUrl) throw new VtoError("VTO_ERROR", "No resultUrl in proxy response");
+    const body = (await res.json()) as { resultUrl?: string };
+    console.log("[VTO:lib] Proxy success body keys:", Object.keys(body));
+    const { resultUrl } = body;
+    if (!resultUrl) {
+      console.error("[VTO:lib] resultUrl missing in response body:", body);
+      throw new VtoError("VTO_ERROR", "No resultUrl in proxy response");
+    }
+    console.log("[VTO:lib] resultUrl:", resultUrl.slice(0, 100));
     return resultUrl;
   } catch (err) {
     if (err instanceof VtoError) throw err;
     const isAbort =
       (err instanceof Error && err.name === "AbortError") ||
       String(err).includes("AbortError");
+    console.error("[VTO:lib] Fetch-level error (isAbort=" + isAbort + "):", err);
     throw new VtoError(
       isAbort ? "VTO_TIMEOUT" : "VTO_ERROR",
       isAbort ? "VTO request timed out" : String(err),

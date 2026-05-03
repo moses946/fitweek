@@ -542,7 +542,11 @@ export default function PlannerScreen() {
   };
 
   const handleGenerateVto = async (slot: OutfitSlot) => {
+    console.log("[VTO] ── handleGenerateVto START ──");
+    console.log("[VTO] slot.id:", slot.id, "garmentIds:", slot.garmentIds);
+
     if (!modelImageUrl) {
+      console.warn("[VTO] BLOCKED — no modelImageUrl. Add a model photo in Profile.");
       Alert.alert(
         "No model photo",
         "Add a model photo in your profile to use Try-On.",
@@ -550,42 +554,55 @@ export default function PlannerScreen() {
       );
       return;
     }
+    console.log("[VTO] modelImageUrl present:", modelImageUrl.slice(0, 60) + "…");
 
     const slotGarments = slot.garmentIds
       .map((id) => garments.find((g) => g.id === id))
       .filter((g): g is Garment => g != null && g.deletedAt === null);
 
+    console.log("[VTO] slotGarments resolved:", slotGarments.map((g) => `${g.name}(${g.category})`));
+
     const hero = selectHeroGarment(slotGarments);
     if (!hero) {
+      console.warn("[VTO] BLOCKED — no hero garment selected (slot may be empty).");
       Alert.alert("No garments", "Add some garments to this outfit first.");
       return;
     }
+    console.log("[VTO] hero garment:", hero.name, "category:", hero.category, "imageUri:", hero.imageUri.slice(0, 80));
 
     // Read garment image as base64 to send to the server-side VTO proxy
     let garmentBase64: string;
     try {
       if (hero.imageUri.startsWith("http")) {
-        // Remote URL: download then base64-encode
+        console.log("[VTO] Fetching garment image from remote URL…");
         const imgRes = await fetch(hero.imageUri);
+        console.log("[VTO] Garment fetch status:", imgRes.status);
+        if (!imgRes.ok) throw new Error(`Garment image fetch failed: ${imgRes.status}`);
         const arrayBuf = await imgRes.arrayBuffer();
         const bytes = new Uint8Array(arrayBuf);
         let binary = "";
         for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
         garmentBase64 = btoa(binary);
+        console.log("[VTO] Garment base64 length:", garmentBase64.length);
       } else {
-        // Local file URI (camera / image picker)
+        console.log("[VTO] Reading garment image from local file system…");
         garmentBase64 = await FileSystem.readAsStringAsync(hero.imageUri, {
           encoding: FileSystem.EncodingType.Base64,
         });
+        console.log("[VTO] Garment base64 length (local):", garmentBase64.length);
       }
-    } catch {
+    } catch (err) {
+      console.error("[VTO] ERROR reading garment image:", err);
       Alert.alert("Try-on failed", "Could not read garment image.");
       return;
     }
 
+    console.log("[VTO] garmentDescription:", hero.aiDescription ?? hero.name);
+
     const controller = new AbortController();
     vtoControllerRef.current = controller;
     setVtoLoading(true);
+    console.log("[VTO] Calling proxy /api/vto/tryon…");
 
     try {
       const resultUrl = await callVTO(
@@ -594,23 +611,30 @@ export default function PlannerScreen() {
         hero.aiDescription ?? hero.name,
         controller.signal,
       );
+      console.log("[VTO] callVTO returned resultUrl:", resultUrl ? resultUrl.slice(0, 80) : "(empty)");
       if (resultUrl) {
         await updateSlotVtoImage(slot.id, resultUrl);
+        console.log("[VTO] Slot VTO image updated successfully.");
       }
     } catch (err) {
+      console.error("[VTO] callVTO threw:", err);
       if (err instanceof VtoError) {
+        console.error("[VTO] VtoError code:", err.code, "message:", err.message);
         if (err.code === "VTO_TIMEOUT") {
           Alert.alert(
             "Try-on is busy",
             "The AI is busy right now — try again in a few minutes.",
           );
         } else {
-          Alert.alert("Try-on failed", "Something went wrong. Please try again.");
+          Alert.alert("Try-on failed", err.message || "Something went wrong. Please try again.");
         }
+      } else {
+        Alert.alert("Try-on failed", String(err));
       }
     } finally {
       setVtoLoading(false);
       vtoControllerRef.current = null;
+      console.log("[VTO] ── handleGenerateVto END ──");
     }
   };
 
