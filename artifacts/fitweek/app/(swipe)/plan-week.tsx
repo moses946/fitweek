@@ -1,5 +1,4 @@
 import { Feather } from "@expo/vector-icons";
-import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -20,14 +19,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BackCard, CARD_HEIGHT, CARD_WIDTH, SwipeCard } from "@/components/SwipeCard";
 import brandColors from "@/constants/colors";
-import { useAuth } from "@/contexts/AuthContext";
 import { useGarments } from "@/contexts/GarmentContext";
 import { useOutfitSlots } from "@/contexts/OutfitSlotContext";
 import { useWeather } from "@/contexts/WeatherContext";
 import { useColors } from "@/hooks/useColors";
 import { interleaveByCategory } from "@/lib/suggestionFilter";
-import type { Garment, OutfitSlot } from "@/lib/types";
-import { callVTO, selectHeroGarment } from "@/lib/vto";
+import type { Garment } from "@/lib/types";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const LOW_DECK_THRESHOLD = 3;
@@ -56,45 +53,19 @@ function getProxyBase(): string {
   return domain ? `https://${domain}` : "http://localhost:8080";
 }
 
-async function readImageAsBase64(imageUri: string): Promise<string> {
-  if (imageUri.startsWith("http")) {
-    const imgRes = await fetch(imageUri);
-    if (!imgRes.ok) throw new Error(`Fetch failed: ${imgRes.status}`);
-    const arrayBuf = await imgRes.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuf);
-    let binary = "";
-    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]!);
-    return btoa(binary);
-  }
-  return FileSystem.readAsStringAsync(imageUri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-}
-
-function buildGarmentDesc(hero: Garment): string {
-  if (hero.aiDescription) return hero.aiDescription;
-  const nameLower = hero.name.toLowerCase();
-  if (nameLower === "other" || nameLower === hero.category.toLowerCase()) {
-    return `${hero.category} garment`;
-  }
-  return `${hero.name}, ${hero.category} garment`;
-}
-
 export default function PlanWeekScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const colors = useColors();
 
   const { garments } = useGarments();
-  const { slots, bulkWriteDrafts, updateSlotVtoImage } = useOutfitSlots();
+  const { slots, bulkWriteDrafts } = useOutfitSlots();
   const { forecast } = useWeather();
-  const { modelImageUrl } = useAuth();
 
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [liveDeck, setLiveDeck] = useState<Garment[]>([]);
   const [sessionPool, setSessionPool] = useState<Garment[]>([]);
   const [curating, setCurating] = useState(false);
-  const [vtoLabel, setVtoLabel] = useState<string | null>(null);
 
   const liveDeckRef = useRef(liveDeck);
   const sessionPoolRef = useRef(sessionPool);
@@ -139,58 +110,6 @@ export default function PlanWeekScreen() {
     advanceDeck(true, garment);
   }, [advanceDeck]);
 
-  const runBackgroundVTO = useCallback(
-    async (writtenSlots: OutfitSlot[], modelUrl: string) => {
-      const isLocal = !modelUrl.startsWith("http://") && !modelUrl.startsWith("https://");
-      let modelBase64: string | undefined;
-      if (isLocal) {
-        try {
-          modelBase64 = await FileSystem.readAsStringAsync(modelUrl, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-        } catch {
-          return;
-        }
-      }
-
-      const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-      for (let i = 0; i < writtenSlots.length; i++) {
-        const slot = writtenSlots[i]!;
-        const dayName = days[i] ?? `Day ${i + 1}`;
-        setVtoLabel(`Creating look for ${dayName}…`);
-
-        const slotGarments = slot.garmentIds
-          .map((id) => garments.find((g) => g.id === id))
-          .filter((g): g is Garment => g != null && !g.deletedAt);
-
-        const hero = selectHeroGarment(slotGarments);
-        if (!hero) continue;
-
-        try {
-          const garmentBase64 = await readImageAsBase64(hero.imageUri);
-          const garmentDesc = buildGarmentDesc(hero);
-
-          const resultUrl = await callVTO(
-            isLocal ? null : modelUrl,
-            garmentBase64,
-            garmentDesc,
-            undefined,
-            modelBase64,
-          );
-          if (resultUrl) {
-            await updateSlotVtoImage(slot.id, resultUrl);
-          }
-        } catch {
-          // Silent fail — VTO will be available to generate manually
-        }
-
-        await new Promise<void>((res) => setTimeout(res, 5_000));
-      }
-      setVtoLabel(null);
-    },
-    [garments, updateSlotVtoImage],
-  );
-
   const handleCurateWeek = useCallback(async () => {
     const likedList = garments.filter((g) => likedIds.has(g.id));
     const poolForSuggest = likedList.length >= MIN_LIKED
@@ -230,23 +149,15 @@ export default function PlanWeekScreen() {
       const { suggestions } = (await res.json()) as { suggestions: Record<string, string[]> };
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const writtenSlots = await bulkWriteDrafts(suggestions);
+      await bulkWriteDrafts(suggestions);
 
       router.back();
-
-      if (modelImageUrl && writtenSlots.length > 0) {
-        // Give the Gradio Space 20s to wake up before firing the first VTO request.
-        // Firing immediately when the Space is cold causes instant "data: null" errors.
-        setTimeout(() => {
-          runBackgroundVTO(writtenSlots, modelImageUrl).catch(() => {});
-        }, 20_000);
-      }
     } catch {
       Alert.alert("Curating failed", "Could not build your week. Please try again.");
     } finally {
       setCurating(false);
     }
-  }, [garments, likedIds, slots, forecast, bulkWriteDrafts, router, modelImageUrl, runBackgroundVTO]);
+  }, [garments, likedIds, slots, forecast, bulkWriteDrafts, router]);
 
   const likedCount = likedIds.size;
   const deckExhausted = liveDeck.length === 0;
@@ -354,14 +265,6 @@ export default function PlanWeekScreen() {
               />
             ))}
           </ScrollView>
-        </View>
-      )}
-
-      {/* VTO progress label */}
-      {vtoLabel && (
-        <View style={styles.vtoRow}>
-          <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={[styles.vtoLabel, { color: colors.mutedForeground }]}>{vtoLabel}</Text>
         </View>
       )}
 
@@ -486,14 +389,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 2,
   },
-  vtoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 8,
-  },
-  vtoLabel: { fontSize: 12, fontFamily: "Poppins_400Regular" },
   bottomBar: {
     paddingHorizontal: 20,
     paddingTop: 12,
