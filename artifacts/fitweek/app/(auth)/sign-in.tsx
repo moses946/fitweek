@@ -43,12 +43,6 @@ export default function SignInScreen() {
     }
   };
 
-  const FEATURES = [
-    { icon: "camera" as const, label: "Photograph" },
-    { icon: "sun" as const, label: "Weather" },
-    { icon: "calendar" as const, label: "Plan" },
-  ];
-
   return (
     <LinearGradient
       colors={colors.gradientPrimary}
@@ -71,28 +65,39 @@ export default function SignInScreen() {
         </View>
       )}
 
-      <View style={styles.content}>
-        {/* Logo */}
-        <View style={styles.logoArea}>
-          <Image
-            source={require("@/assets/images/Logo2.png")}
-            style={styles.logoImage}
-            contentFit="contain"
-            tintColor="#FFFFFF"
-          />
-          <Text style={styles.tagline}>Your wardrobe. Planned.</Text>
-        </View>
+      {/* Logo */}
+      <View style={styles.logoArea}>
+        <Image
+          source={require("@/assets/images/Logo2.png")}
+          style={styles.logoImage}
+          contentFit="contain"
+          tintColor="#FFFFFF"
+        />
+      </View>
 
-        {/* Feature cards */}
-        <View style={styles.featureRow}>
-          {FEATURES.map(({ icon, label }) => (
-            <View key={label} style={styles.featureCard}>
-              <Feather name={icon} size={22} color="#FFFFFF" />
-              <Text style={styles.featureLabel}>{label}</Text>
-            </View>
-          ))}
-        </View>
+      {/* Hero image */}
+      <View style={styles.heroWrapper}>
+        <Image
+          source={require("@/assets/images/Hero.png")}
+          style={styles.heroImage}
+          contentFit="cover"
+        />
+        {/* Subtle gradient fade at top and bottom so image blends into background */}
+        <LinearGradient
+          colors={["rgba(139,47,245,0.55)", "transparent"]}
+          style={styles.heroFadeTop}
+          pointerEvents="none"
+        />
+        <LinearGradient
+          colors={["transparent", "rgba(37,99,235,0.65)"]}
+          style={styles.heroFadeBottom}
+          pointerEvents="none"
+        />
+      </View>
 
+      {/* Tagline */}
+      <View style={styles.taglineArea}>
+        <Text style={styles.tagline}>Your week, already dressed.</Text>
         <Text style={styles.pitch}>
           {"Only shows what's actually "}
           <Text style={{ fontFamily: "Poppins_600SemiBold" }}>clean</Text>
@@ -128,6 +133,7 @@ export default function SignInScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
   banner: {
     flexDirection: "row",
     alignItems: "center",
@@ -147,48 +153,78 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.9)",
     flex: 1,
   },
-  content: {
-    flex: 1,
+
+  logoArea: {
     alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 28,
-    gap: 36,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
-  logoArea: { alignItems: "center", gap: 14 },
   logoImage: {
-    width: 240,
-    height: 80,
+    width: 200,
+    height: 64,
+  },
+
+  heroWrapper: {
+    flex: 1,
+    marginHorizontal: 24,
+    borderRadius: 24,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 10,
+    minHeight: 260,
+  },
+  heroImage: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  heroFadeTop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 56,
+    zIndex: 1,
+  },
+  heroFadeBottom: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 70,
+    zIndex: 1,
+  },
+
+  taglineArea: {
+    alignItems: "center",
+    paddingHorizontal: 28,
+    paddingTop: 20,
+    paddingBottom: 4,
+    gap: 6,
   },
   tagline: {
-    fontSize: 16,
-    fontFamily: "Poppins_400Regular",
-    color: "rgba(255,255,255,0.85)",
-    letterSpacing: 0.2,
-  },
-  featureRow: { flexDirection: "row", gap: 12 },
-  featureCard: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 18,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
-    backgroundColor: "rgba(255,255,255,0.15)",
-    gap: 8,
-  },
-  featureLabel: {
-    fontSize: 11,
-    fontFamily: "Poppins_500Medium",
-    color: "rgba(255,255,255,0.9)",
+    fontSize: 20,
+    fontFamily: "Poppins_700Bold",
+    color: "#FFFFFF",
+    textAlign: "center",
+    letterSpacing: 0.1,
   },
   pitch: {
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: "Poppins_400Regular",
-    color: "rgba(255,255,255,0.85)",
+    color: "rgba(255,255,255,0.8)",
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: 21,
   },
-  bottom: { paddingHorizontal: 24, gap: 16 },
+
+  bottom: { paddingHorizontal: 24, paddingTop: 20, gap: 14 },
   ctaButton: {
     height: 52,
     borderRadius: 12,
@@ -209,7 +245,7 @@ const styles = StyleSheet.create({
   legal: {
     fontSize: 12,
     fontFamily: "Poppins_400Regular",
-    color: "rgba(255,255,255,0.65)",
+    color: "rgba(255,255,255,0.6)",
     textAlign: "center",
     lineHeight: 17,
   },
