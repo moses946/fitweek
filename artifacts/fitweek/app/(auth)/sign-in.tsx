@@ -98,12 +98,6 @@ export default function SignInScreen() {
       {/* Tagline */}
       <View style={styles.taglineArea}>
         <Text style={styles.tagline}>Your week, already dressed.</Text>
-        <Text style={styles.pitch}>
-          {"Only shows what's actually "}
-          <Text style={{ fontFamily: "Poppins_600SemiBold" }}>clean</Text>
-          {" and right for the "}
-          <Text style={{ fontFamily: "Poppins_600SemiBold" }}>weather</Text>.
-        </Text>
       </View>
 
       {/* CTA */}
@@ -211,17 +205,10 @@ const styles = StyleSheet.create({
   },
   tagline: {
     fontSize: 20,
-    fontFamily: "Poppins_700Bold",
+    fontFamily: "Poppins_500Medium",
     color: "#FFFFFF",
     textAlign: "center",
     letterSpacing: 0.1,
-  },
-  pitch: {
-    fontSize: 14,
-    fontFamily: "Poppins_400Regular",
-    color: "rgba(255,255,255,0.8)",
-    textAlign: "center",
-    lineHeight: 21,
   },
 
   bottom: { paddingHorizontal: 24, paddingTop: 20, gap: 14 },
