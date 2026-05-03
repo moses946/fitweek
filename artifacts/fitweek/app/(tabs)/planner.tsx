@@ -734,123 +734,130 @@ export default function PlannerScreen() {
         </View>
       )}
 
-      {/* Day strip */}
+      {/* Single vertical ScrollView — holds day strip + day detail */}
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.dayStrip}
-      >
-        {weekDays.map((date, i) => {
-          const isoDate = toISODate(date);
-          return (
-            <DayCell
-              key={isoDate}
-              date={date}
-              label={DAY_LABELS[i]!}
-              isToday={isoDate === todayStr}
-              isSelected={isoDate === selectedDate}
-              forecast={forecastByDate.get(isoDate)}
-              slot={slotByDate.get(isoDate)}
-              onPress={() => setSelectedDate(isoDate)}
-            />
-          );
-        })}
-      </ScrollView>
-
-      {/* Selected day detail */}
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentInner}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.mainScroll,
+          { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 80 },
+        ]}
+        nestedScrollEnabled
       >
-        {uiMode === "enterCity" ? (
-          <CityInputCard
-            onSubmit={async (c) => { setUIMode("idle"); await setCity(c); }}
-            onCancel={() => setUIMode("idle")}
-          />
-        ) : showLocationPrompt ? (
-          <LocationPrompt
-            onRequestGPS={requestLocationAndFetch}
-            onOpenCityInput={() => setUIMode("enterCity")}
-          />
-        ) : selectedSlot?.status === "confirmed" ? (
-          <>
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
-              {formatDayHeader(selectedDate)}
-            </Text>
-            <ConfirmedOutfitCard
-              slot={selectedSlot}
-              garments={garments}
-              onEdit={() => handleEditSlot(selectedSlot)}
-              onClear={() => handleClearSlot(selectedSlot)}
-              onMarkAllWorn={() => handleMarkAllWorn(selectedSlot)}
-              onRename={() => handleRename(selectedSlot)}
-              onGenerateVto={() => handleGenerateVto(selectedSlot)}
-              onShare={() => handleShare(selectedSlot)}
+        {/* Day strip — horizontally scrollable */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.dayStrip}
+          nestedScrollEnabled
+        >
+          {weekDays.map((date, i) => {
+            const isoDate = toISODate(date);
+            return (
+              <DayCell
+                key={isoDate}
+                date={date}
+                label={DAY_LABELS[i]!}
+                isToday={isoDate === todayStr}
+                isSelected={isoDate === selectedDate}
+                forecast={forecastByDate.get(isoDate)}
+                slot={slotByDate.get(isoDate)}
+                onPress={() => setSelectedDate(isoDate)}
+              />
+            );
+          })}
+        </ScrollView>
+
+        {/* Selected day detail — inline, no inner ScrollView */}
+        <View style={styles.contentInner}>
+          {uiMode === "enterCity" ? (
+            <CityInputCard
+              onSubmit={async (c) => { setUIMode("idle"); await setCity(c); }}
+              onCancel={() => setUIMode("idle")}
             />
-          </>
-        ) : (
-          <>
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
-              {formatDayHeader(selectedDate)}
-            </Text>
-            {selectedSlot?.status === "draft" && selectedSlot.garmentIds.length > 0 && (
-              <View style={[styles.draftBanner, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-                <Feather name="edit" size={13} color={colors.mutedForeground} />
-                <Text style={[styles.bannerText, { color: colors.mutedForeground }]}>
-                  Draft in progress — {selectedSlot.garmentIds.length} piece{selectedSlot.garmentIds.length !== 1 ? "s" : ""} selected
-                </Text>
-              </View>
-            )}
-            <View style={styles.emptyState}>
-              <View style={[styles.emptyIconWrap, { backgroundColor: colors.muted }]}>
-                <Feather name="calendar" size={32} color={colors.mutedForeground} />
-              </View>
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                {selectedSlot?.garmentIds.length ? "Continue planning?" : "No outfit planned"}
+          ) : showLocationPrompt ? (
+            <LocationPrompt
+              onRequestGPS={requestLocationAndFetch}
+              onOpenCityInput={() => setUIMode("enterCity")}
+            />
+          ) : selectedSlot?.status === "confirmed" ? (
+            <>
+              <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
+                {formatDayHeader(selectedDate)}
               </Text>
-              <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
-                {selectedForecast
-                  ? `It'll be ${selectedForecast.tempMax}° and ${selectedForecast.conditionLabel}. Dress accordingly!`
-                  : "Tap below to build your outfit for this day."}
+              <ConfirmedOutfitCard
+                slot={selectedSlot}
+                garments={garments}
+                onEdit={() => handleEditSlot(selectedSlot)}
+                onClear={() => handleClearSlot(selectedSlot)}
+                onMarkAllWorn={() => handleMarkAllWorn(selectedSlot)}
+                onRename={() => handleRename(selectedSlot)}
+                onGenerateVto={() => handleGenerateVto(selectedSlot)}
+                onShare={() => handleShare(selectedSlot)}
+              />
+            </>
+          ) : (
+            <>
+              <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
+                {formatDayHeader(selectedDate)}
               </Text>
-
-              <Pressable onPress={handlePlanDay}>
-                <LinearGradient
-                  colors={brandColors.gradientPrimary}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.planBtn}
-                >
-                  <Feather name={selectedSlot?.garmentIds.length ? "edit" : "plus"} size={16} color="#FFFFFF" />
-                  <Text style={styles.planBtnText}>
-                    {selectedSlot?.garmentIds.length ? "Continue planning" : "Plan outfit"}
+              {selectedSlot?.status === "draft" && selectedSlot.garmentIds.length > 0 && (
+                <View style={[styles.draftBanner, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                  <Feather name="edit" size={13} color={colors.mutedForeground} />
+                  <Text style={[styles.bannerText, { color: colors.mutedForeground }]}>
+                    Draft in progress — {selectedSlot.garmentIds.length} piece{selectedSlot.garmentIds.length !== 1 ? "s" : ""} selected
                   </Text>
-                </LinearGradient>
-              </Pressable>
-
-              {!selectedSlot?.garmentIds.length && (
-                <Pressable
-                  onPress={handleSuggestForDay}
-                  disabled={weekSuggesting}
-                  style={[
-                    styles.suggestDayBtn,
-                    { borderColor: colors.primary, opacity: weekSuggesting ? 0.6 : 1 },
-                  ]}
-                >
-                  {weekSuggesting ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  ) : (
-                    <Feather name="zap" size={14} color={colors.primary} />
-                  )}
-                  <Text style={[styles.suggestDayText, { color: colors.primary }]}>
-                    Suggest outfit
-                  </Text>
-                </Pressable>
+                </View>
               )}
-            </View>
-          </>
-        )}
+              <View style={styles.emptyState}>
+                <View style={[styles.emptyIconWrap, { backgroundColor: colors.muted }]}>
+                  <Feather name="calendar" size={32} color={colors.mutedForeground} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+                  {selectedSlot?.garmentIds.length ? "Continue planning?" : "No outfit planned"}
+                </Text>
+                <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
+                  {selectedForecast
+                    ? `It'll be ${selectedForecast.tempMax}° and ${selectedForecast.conditionLabel}. Dress accordingly!`
+                    : "Tap below to build your outfit for this day."}
+                </Text>
+
+                <Pressable onPress={handlePlanDay}>
+                  <LinearGradient
+                    colors={brandColors.gradientPrimary}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.planBtn}
+                  >
+                    <Feather name={selectedSlot?.garmentIds.length ? "edit" : "plus"} size={16} color="#FFFFFF" />
+                    <Text style={styles.planBtnText}>
+                      {selectedSlot?.garmentIds.length ? "Continue planning" : "Plan outfit"}
+                    </Text>
+                  </LinearGradient>
+                </Pressable>
+
+                {!selectedSlot?.garmentIds.length && (
+                  <Pressable
+                    onPress={handleSuggestForDay}
+                    disabled={weekSuggesting}
+                    style={[
+                      styles.suggestDayBtn,
+                      { borderColor: colors.primary, opacity: weekSuggesting ? 0.6 : 1 },
+                    ]}
+                  >
+                    {weekSuggesting ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : (
+                      <Feather name="zap" size={14} color={colors.primary} />
+                    )}
+                    <Text style={[styles.suggestDayText, { color: colors.primary }]}>
+                      Suggest outfit
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            </>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -901,23 +908,30 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   loadingText: { fontSize: 13, fontFamily: "Poppins_400Regular" },
-  dayStrip: { paddingHorizontal: 16, paddingBottom: 16, gap: 8, flexDirection: "row" },
+  mainScroll: { flexGrow: 1 },
+  dayStrip: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    paddingTop: 4,
+    gap: 8,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
   dayCell: {
-    width: 52,
+    width: 68,
     alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
     borderRadius: 14,
     borderWidth: 1,
     gap: 2,
   },
-  dayLabel: { fontSize: 10, fontFamily: "Poppins_600SemiBold" },
-  dayDate: { fontSize: 15, fontFamily: "Poppins_700Bold" },
-  weatherEmoji: { fontSize: 14, lineHeight: 18 },
+  dayLabel: { fontSize: 11, fontFamily: "Poppins_600SemiBold" },
+  dayDate: { fontSize: 16, fontFamily: "Poppins_700Bold" },
+  weatherEmoji: { fontSize: 16, lineHeight: 20 },
   weatherTemp: { fontSize: 10, fontFamily: "Poppins_500Medium" },
-  outfitDot: { width: 5, height: 5, borderRadius: 3, marginTop: 1 },
-  content: { flex: 1 },
-  contentInner: { paddingHorizontal: 20, paddingBottom: 40 },
+  outfitDot: { width: 5, height: 5, borderRadius: 3, marginTop: 2 },
+  contentInner: { paddingHorizontal: 20, paddingBottom: 20 },
   sectionLabel: { fontSize: 13, fontFamily: "Poppins_500Medium", marginBottom: 12 },
   // Confirmed outfit card
   outfitCard: {
