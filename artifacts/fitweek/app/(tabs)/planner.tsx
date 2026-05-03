@@ -36,9 +36,6 @@ import { buildSuggestionDeck } from "@/lib/suggestionFilter";
 
 function getWeekDays(from: Date = new Date()): Date[] {
   const start = new Date(from);
-  const dayOfWeek = start.getDay();
-  const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  start.setDate(start.getDate() + diff);
   start.setHours(0, 0, 0, 0);
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start);
@@ -47,7 +44,10 @@ function getWeekDays(from: Date = new Date()): Date[] {
   });
 }
 
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+/** Short weekday name from the date's local day-of-week. */
+function dayLabel(d: Date): string {
+  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()]!;
+}
 
 const WEATHER_EMOJI: Record<string, string> = {
   clear: "☀️",
@@ -59,7 +59,10 @@ const WEATHER_EMOJI: Record<string, string> = {
 };
 
 function toISODate(d: Date): string {
-  return d.toISOString().split("T")[0]!;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function formatDayHeader(isoDate: string): string {
@@ -750,13 +753,13 @@ export default function PlannerScreen() {
           contentContainerStyle={styles.dayStrip}
           nestedScrollEnabled
         >
-          {weekDays.map((date, i) => {
+          {weekDays.map((date) => {
             const isoDate = toISODate(date);
             return (
               <DayCell
                 key={isoDate}
                 date={date}
-                label={DAY_LABELS[i]!}
+                label={dayLabel(date)}
                 isToday={isoDate === todayStr}
                 isSelected={isoDate === selectedDate}
                 forecast={forecastByDate.get(isoDate)}
