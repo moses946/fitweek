@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -21,6 +22,7 @@ import { GradientButton } from "@/components/GradientButton";
 import brandColors from "@/constants/colors";
 import { GarmentCategory, useGarments } from "@/contexts/GarmentContext";
 import { useColors } from "@/hooks/useColors";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 const CATEGORIES: GarmentCategory[] = [
   "tops", "bottoms", "dresses", "outerwear", "shoes", "accessories", "other",
@@ -73,6 +75,9 @@ export default function AddGarmentScreen() {
 
   const [step, setStep] = useState<Step>("pick");
   const [imageUri, setImageUri] = useState<string | null>(null);
+  /** Set to the bg-removed data URI after classify returns processedImageBase64. */
+  const [processedUri, setProcessedUri] = useState<string | null>(null);
+  const [analyzingLabel, setAnalyzingLabel] = useState("Removing background…");
   const [category, setCategory] = useState<GarmentCategory>("tops");
   const [color, setColor] = useState("Unknown");
   const [tags, setTags] = useState<string[]>([]);
@@ -112,15 +117,27 @@ export default function AddGarmentScreen() {
 
       const asset = result.assets[0];
       setImageUri(asset.uri);
+      setProcessedUri(null);
+      setAnalyzingLabel("Removing background…");
       setStep("analyzing");
 
+      // Phase 1 label is shown until the classify call begins returning
       const classified = await classifyImage({ imageBase64: asset.base64 ?? undefined });
+
+      // Switch label for phase 2 (classify is synchronous from the server's PoV,
+      // but the label flip reassures the user that something new is happening)
+      setAnalyzingLabel("Classifying garment…");
 
       if (classified) {
         setCategory(classified.category);
         setColor(classified.color);
         setTags(classified.tags);
         if (classified.matchedLabel) setName(classified.matchedLabel);
+
+        // If the server returned a bg-removed PNG, swap in the clean version
+        if (classified.processedImageBase64) {
+          setProcessedUri(`data:image/png;base64,${classified.processedImageBase64}`);
+        }
       }
       setStep("review");
     } catch {
@@ -133,13 +150,75 @@ export default function AddGarmentScreen() {
     if (!imageUri) return;
     setIsSaving(true);
     try {
+      // Determine which URI to store — prefer the bg-removed version
+      const displayUri = processedUri ?? imageUri;
+
+      // Upload to Supabase Storage — always, so we store a stable HTTPS URL.
+      // Prefer the bg-removed PNG when available; fall back to the original image.
+      //
+      // IMPORTANT: React Native's fetch() returns empty bodies for file:// URIs.
+      // The correct Expo pattern is: readAsStringAsync(base64) → decode → ArrayBuffer.
+      let finalUri = displayUri;
+      if (isSupabaseConfigured) {
+        try {
+          let base64: string;
+          let contentType: string;
+          const storagePath = `garments/${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+          if (processedUri) {
+            // bg-removed: processedUri is already a data:image/png;base64,... URI in memory
+            base64 = processedUri.replace(/^data:image\/png;base64,/, "");
+            contentType = "image/png";
+          } else {
+            // Original picked image — read from the device file system
+            base64 = await FileSystem.readAsStringAsync(imageUri, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+            // Detect type from the URI extension; default to jpeg
+            const lower = imageUri.toLowerCase();
+            contentType = lower.endsWith(".png") ? "image/png"
+              : lower.endsWith(".webp") ? "image/webp"
+              : "image/jpeg";
+          }
+
+          // Decode base64 → Uint8Array → ArrayBuffer (works everywhere in Expo)
+          const binaryStr = atob(base64);
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+
+          const ext = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
+          const { error: uploadError } = await supabase.storage
+            .from("garments")
+            .upload(`${storagePath}.${ext}`, bytes.buffer as ArrayBuffer, {
+              contentType,
+              upsert: false,
+            });
+
+          if (!uploadError) {
+            const { data: urlData } = supabase.storage
+              .from("garments")
+              .getPublicUrl(`${storagePath}.${ext}`);
+            finalUri = urlData.publicUrl;
+            console.log("[garment-save] Uploaded to Supabase:", finalUri);
+          } else {
+            console.warn("[garment-save] Supabase upload failed, using local URI.", uploadError);
+          }
+        } catch (uploadErr) {
+          console.warn("[garment-save] Upload step threw, using local URI.", uploadErr);
+        }
+      }
+
+
+
       await addGarment({
-        imageUri,
+        imageUrl: finalUri,
         category,
         color,
         tags,
         name: name.trim() || CATEGORY_LABELS[category],
-        status: "clean",
+        status: "active",
       });
       router.back();
     } catch {
@@ -230,7 +309,7 @@ export default function AddGarmentScreen() {
             Analyzing garment…
           </Text>
           <Text style={[styles.analyzingSubtext, { color: colors.mutedForeground }]}>
-            Google Vision is classifying your item
+            {analyzingLabel}
           </Text>
         </View>
       </View>
@@ -255,8 +334,8 @@ export default function AddGarmentScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[styles.reviewContent, { paddingBottom: pb + 80 }]}>
-        {imageUri && (
-          <Image source={{ uri: imageUri }} style={styles.reviewImage} contentFit="cover" />
+        {(processedUri ?? imageUri) && (
+          <Image source={{ uri: processedUri ?? imageUri! }} style={styles.reviewImage} contentFit="contain" />
         )}
 
         <View style={styles.section}>

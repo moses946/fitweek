@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import storage from "@/lib/storage";
 import * as Location from "expo-location";
 import React, {
   createContext,
@@ -97,7 +98,7 @@ export function WeatherProvider({ children }: { children: React.ReactNode }) {
       // Restore saved city
       let savedCity: string | null = null;
       try {
-        savedCity = await AsyncStorage.getItem(CITY_KEY);
+        savedCity = await storage.getString(CITY_KEY);
         if (mounted) setLocalCity(savedCity);
       } catch {}
 
@@ -149,19 +150,19 @@ export function WeatherProvider({ children }: { children: React.ReactNode }) {
   const setCity = useCallback(
     async (cityName: string) => {
       setIsLoading(true);
-      try {
-        await AsyncStorage.setItem(CITY_KEY, cityName);
-        setLocalCity(cityName);
-        await fetchByCity(cityName);
-      } finally {
-        setIsLoading(false);
-      }
+        try {
+          await storage.setString(CITY_KEY, cityName);
+          setLocalCity(cityName);
+          await fetchByCity(cityName);
+        } finally {
+          setIsLoading(false);
+        }
     },
     [fetchByCity],
   );
 
   const clearCity = useCallback(async () => {
-    await AsyncStorage.removeItem(CITY_KEY);
+    await storage.removeItem(CITY_KEY);
     setLocalCity(null);
   }, []);
 

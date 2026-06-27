@@ -81,7 +81,7 @@ export function OutfitAssemblyPanel({
           {assembledGarments.map((g) => (
             <View key={g.id} style={styles.thumbnailWrap}>
               <Image
-                source={{ uri: g.imageUri }}
+                source={{ uri: g.imageUrl }}
                 style={styles.thumbnail}
                 contentFit="cover"
               />

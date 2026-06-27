@@ -3,7 +3,6 @@ import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  Alert,
   Platform,
   Pressable,
   StyleSheet,
@@ -15,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GradientButton } from "@/components/GradientButton";
 import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { usePhotoPicker } from "@/hooks/usePhotoPicker";
 
 export default function ModelPhotoScreen() {
   const colors = useColors();
@@ -23,22 +23,17 @@ export default function ModelPhotoScreen() {
   const { mode } = useLocalSearchParams<{ mode?: string }>();
   const isUpdateMode = mode === "update";
 
-  const { pickModelPhoto, completeOnboarding, modelImageUrl } = useAuth();
+  const { completeOnboarding, modelPhotoSignedUrl } = useAuth();
+  const { pickPhoto, isPicking } = usePhotoPicker();
+  
   const [photoUri, setPhotoUri] = useState<string | null>(
-    isUpdateMode ? (modelImageUrl ?? null) : null,
+    isUpdateMode ? (modelPhotoSignedUrl ?? null) : null,
   );
   const [isSaving, setIsSaving] = useState(false);
 
   const handlePickPhoto = async () => {
-    try {
-      const uri = await pickModelPhoto();
-      if (uri) setPhotoUri(uri);
-    } catch {
-      Alert.alert(
-        "Photo error",
-        "Could not access your photo library. Please check permissions.",
-      );
-    }
+    const uri = await pickPhoto();
+    if (uri) setPhotoUri(uri);
   };
 
   const handleContinue = async () => {
@@ -51,12 +46,12 @@ export default function ModelPhotoScreen() {
         router.replace("/(tabs)");
       }
     } catch {
-      Alert.alert("Error", "Something went wrong. Please try again.");
       setIsSaving(false);
     }
   };
 
   const handleSkip = async () => {
+    setIsSaving(true);
     await completeOnboarding(null);
     router.replace("/(tabs)");
   };
@@ -73,14 +68,14 @@ export default function ModelPhotoScreen() {
     : "Used to generate virtual try-on previews. Take a full-body photo against a plain wall.";
 
   const continueLabel = isUpdateMode
-    ? photoUri === modelImageUrl
+    ? photoUri === modelPhotoSignedUrl
       ? "No changes"
       : "Save changes"
     : photoUri
       ? "Continue"
       : "Continue without photo";
 
-  const continueDisabled = isUpdateMode && photoUri === modelImageUrl;
+  const continueDisabled = isUpdateMode && photoUri === modelPhotoSignedUrl;
 
   return (
     <View
@@ -93,13 +88,15 @@ export default function ModelPhotoScreen() {
         },
       ]}
     >
-      {isUpdateMode && (
-        <View style={styles.navBar}>
+      <View style={styles.navBar}>
+        {isUpdateMode ? (
           <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={12}>
             <Feather name="arrow-left" size={22} color={colors.foreground} />
           </Pressable>
-        </View>
-      )}
+        ) : (
+          <Text style={[styles.stepIndicator, { color: colors.mutedForeground }]}>Step 1 of 1</Text>
+        )}
+      </View>
 
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
@@ -110,7 +107,7 @@ export default function ModelPhotoScreen() {
 
       <View style={styles.photoArea}>
         {photoUri ? (
-          <Pressable onPress={handlePickPhoto} style={styles.photoPreviewWrapper}>
+          <Pressable onPress={handlePickPhoto} style={styles.photoPreviewWrapper} disabled={isSaving || isPicking}>
             <Image source={{ uri: photoUri }} style={styles.photoPreview} contentFit="cover" />
             <View style={[styles.retakeOverlay, { backgroundColor: "#0F172ACC" }]}>
               <Feather name="refresh-cw" size={20} color="#FFFFFF" />
@@ -127,44 +124,55 @@ export default function ModelPhotoScreen() {
             ]}
             onPress={handlePickPhoto}
             testID="pick-photo-button"
+            disabled={isSaving || isPicking}
           >
-            <Feather name="user" size={48} color={colors.border} />
-            <Pressable
-              style={[styles.addPhotoButton, { backgroundColor: colors.primary }]}
-              onPress={handlePickPhoto}
-            >
-              <Feather name="camera" size={16} color="#FFFFFF" />
-              <Text style={styles.addPhotoText}>Choose photo</Text>
+            <View style={styles.placeholderContent}>
+              <Feather name="user" size={48} color={colors.border} />
+              <View style={[styles.addPhotoButton, { backgroundColor: colors.primary }]}>
+                <Feather name="camera" size={16} color="#FFFFFF" />
+                <Text style={styles.addPhotoText}>Choose photo</Text>
+              </View>
+              <Text style={[styles.permissionHint, { color: colors.mutedForeground }]}>
+                We'll ask for permission to access your photos.
+              </Text>
+            </View>
+          </Pressable>
+        )}
+      </View>
+
+      <View style={styles.bottomArea}>
+        <View style={styles.tips}>
+          {TIPS.map((tip) => (
+            <View key={tip.text} style={styles.tipRow}>
+              <Feather name={tip.icon} size={14} color={colors.accent} />
+              <Text style={[styles.tipText, { color: colors.mutedForeground }]}>{tip.text}</Text>
+            </View>
+          ))}
+          {!isUpdateMode && (
+            <View style={styles.tipRow}>
+              <Feather name="shield" size={14} color={colors.accent} />
+              <Text style={[styles.tipText, { color: colors.mutedForeground }]}>Your photo is kept private.</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.actions}>
+          <GradientButton
+            testID="continue-button"
+            onPress={handleContinue}
+            isLoading={isSaving}
+            disabled={continueDisabled || isPicking}
+            label={continueLabel}
+          />
+
+          {!isUpdateMode && (
+            <Pressable onPress={handleSkip} testID="skip-button" hitSlop={12} disabled={isSaving}>
+              <Text style={[styles.skipText, { color: colors.mutedForeground }]}>
+                Set up later
+              </Text>
             </Pressable>
-          </Pressable>
-        )}
-      </View>
-
-      <View style={styles.tips}>
-        {TIPS.map((tip) => (
-          <View key={tip.text} style={styles.tipRow}>
-            <Feather name={tip.icon} size={14} color={colors.accent} />
-            <Text style={[styles.tipText, { color: colors.mutedForeground }]}>{tip.text}</Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={styles.actions}>
-        <GradientButton
-          testID="continue-button"
-          onPress={handleContinue}
-          isLoading={isSaving}
-          disabled={continueDisabled}
-          label={continueLabel}
-        />
-
-        {!isUpdateMode && photoUri && (
-          <Pressable onPress={handleSkip} testID="skip-button">
-            <Text style={[styles.skipText, { color: colors.mutedForeground }]}>
-              Skip for now
-            </Text>
-          </Pressable>
-        )}
+          )}
+        </View>
       </View>
     </View>
   );
@@ -175,12 +183,19 @@ const styles = StyleSheet.create({
   navBar: {
     paddingHorizontal: 16,
     paddingBottom: 8,
+    minHeight: 40,
+    justifyContent: "center",
   },
   backButton: {
     width: 40,
     height: 40,
     alignItems: "center",
     justifyContent: "center",
+  },
+  stepIndicator: {
+    fontSize: 14,
+    fontFamily: "Poppins_500Medium",
+    paddingHorizontal: 8,
   },
   header: { paddingHorizontal: 24, gap: 8, marginBottom: 24 },
   title: { fontSize: 28, fontFamily: "Poppins_700Bold" },
@@ -198,9 +213,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1.5,
     borderStyle: "dashed",
+    overflow: "hidden",
+  },
+  placeholderContent: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 20,
+    padding: 20,
+    gap: 16,
   },
   addPhotoButton: {
     flexDirection: "row",
@@ -209,8 +229,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
     gap: 8,
+    marginTop: 8,
   },
   addPhotoText: { fontSize: 14, fontFamily: "Poppins_600SemiBold", color: "#FFFFFF" },
+  permissionHint: {
+    fontSize: 12,
+    fontFamily: "Poppins_400Regular",
+    textAlign: "center",
+    marginTop: 8,
+  },
   photoPreviewWrapper: {
     width: "100%",
     maxWidth: 260,
@@ -231,9 +258,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   retakeText: { fontSize: 14, fontFamily: "Poppins_600SemiBold", color: "#FFFFFF" },
-  tips: { paddingHorizontal: 24, paddingVertical: 20, gap: 10 },
+  bottomArea: {
+    gap: 16,
+  },
+  tips: { paddingHorizontal: 24, paddingTop: 10, gap: 10 },
   tipRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   tipText: { fontSize: 13, fontFamily: "Poppins_400Regular" },
-  actions: { paddingHorizontal: 24, gap: 14, alignItems: "center" },
-  skipText: { fontSize: 14, fontFamily: "Poppins_400Regular" },
+  actions: { paddingHorizontal: 24, gap: 16, alignItems: "center" },
+  skipText: { fontSize: 14, fontFamily: "Poppins_500Medium", paddingVertical: 8 },
 });

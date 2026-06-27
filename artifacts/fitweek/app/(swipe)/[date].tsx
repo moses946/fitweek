@@ -23,11 +23,39 @@ import { useGarments } from "@/contexts/GarmentContext";
 import { useOutfitSlots } from "@/contexts/OutfitSlotContext";
 import { useWeather } from "@/contexts/WeatherContext";
 import { useColors } from "@/hooks/useColors";
-import { buildSuggestionDeck } from "@/lib/suggestionFilter";
+import { API_BASE_URL } from "@/lib/config";
 import type { Garment, OutfitSlot } from "@/lib/types";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const LOW_DECK_THRESHOLD = 3;
+
+function getProxyBase(): string {
+  if (Platform.OS === "web") return "";
+  return API_BASE_URL;
+}
+
+async function fetchSwipeDeck(
+  date: string,
+  garments: Garment[],
+  forecast: { date: string; tempMin: number; tempMax: number; condition: string } | null,
+  plannedGarmentIds: string[],
+): Promise<Garment[]> {
+  const base = getProxyBase();
+  const res = await fetch(`${base}/api/outfit/deck`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      date,
+      garments,
+      forecast,
+      plannedGarmentIds,
+    }),
+  });
+  if (!res.ok) throw new Error("Deck fetch failed");
+  const { deck: deckIds } = (await res.json()) as { deck: string[] };
+  const byId = new Map(garments.map((g) => [g.id, g]));
+  return deckIds.map((id) => byId.get(id)).filter((g): g is Garment => !!g);
+}
 
 function formatDateLabel(isoDate: string): string {
   try {
@@ -97,24 +125,35 @@ export default function SwipeDeckScreen() {
   useEffect(() => {
     if (!date) return;
 
-    getOrCreateDraft(date).then((s) => {
+    let cancelled = false;
+
+    getOrCreateDraft(date).then(async (s) => {
+      if (cancelled) return;
       setSlot(s);
 
-      const confirmedIds = new Set(
-        slots
-          .filter((sl) => sl.status === "confirmed" && sl.date !== date)
-          .flatMap((sl) => sl.garmentIds),
-      );
-      const eligible = garments.filter((g) => !confirmedIds.has(g.id));
+      const confirmedIds = slots
+        .filter((sl) => sl.status === "confirmed" && sl.date !== date)
+        .flatMap((sl) => sl.garmentIds);
+      const eligible = garments.filter((g) => !confirmedIds.includes(g.id));
       const todayForecast = forecast?.find((f) => f.date === date) ?? null;
-      const dateObj = (() => {
-        const [y, m, d] = date.split("-").map(Number);
-        return new Date(y!, m! - 1, d!);
-      })();
 
-      setLiveDeck(buildSuggestionDeck(eligible, todayForecast, dateObj));
+      try {
+        const deck = await fetchSwipeDeck(
+          date,
+          eligible,
+          todayForecast,
+          confirmedIds,
+        );
+        if (!cancelled) setLiveDeck(deck);
+      } catch {
+        if (!cancelled) setLiveDeck(eligible);
+      }
     });
-  }, [date]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [date, garments, slots, forecast]);
 
   useEffect(() => {
     if (!slot) return;

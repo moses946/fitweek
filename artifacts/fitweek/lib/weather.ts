@@ -15,6 +15,8 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { API_BASE_URL } from "./config";
+
 export type WeatherCondition =
   | "clear"
   | "cloudy"
@@ -63,12 +65,15 @@ function cityCacheKey(city: string): string {
   return `${CACHE_PREFIX}city_${city.toLowerCase().replace(/\s+/g, "_")}`;
 }
 
+import storage from "@/lib/storage";
+
 async function readCache(key: string): Promise<CacheEntry | null> {
   try {
-    const raw = await AsyncStorage.getItem(key);
-    if (!raw) return null;
-    const entry = JSON.parse(raw) as CacheEntry;
-    if (Date.now() - entry.fetchedAt > TTL_MS) return null; // expired
+    const entry = await storage.get<CacheEntry>(key);
+    if (!entry) return null;
+    if (Date.now() - entry.fetchedAt > TTL_MS) {
+      return null;
+    }
     return entry;
   } catch {
     return null;
@@ -78,7 +83,7 @@ async function readCache(key: string): Promise<CacheEntry | null> {
 async function writeCache(key: string, days: DailyForecast[]): Promise<void> {
   try {
     const entry: CacheEntry = { fetchedAt: Date.now(), days };
-    await AsyncStorage.setItem(key, JSON.stringify(entry));
+    await storage.set(key, entry);
   } catch {
     // Non-fatal — cache write failure is acceptable
   }
@@ -88,8 +93,7 @@ async function writeCache(key: string, days: DailyForecast[]): Promise<void> {
 
 function apiBase(baseUrl?: string): string {
   if (baseUrl) return baseUrl;
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  return domain ? `https://${domain}` : "";
+  return API_BASE_URL;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

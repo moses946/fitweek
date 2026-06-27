@@ -36,7 +36,7 @@ export function markWorn(garments: Garment[], id: string): Garment[] {
   const g = garments.find((g) => g.id === id);
   if (!g) return garments;
   return patch(garments, id, {
-    status: "worn",
+    // status stays 'active' — wear state is tracked via wearCount + lastWornAt
     wearCount: g.wearCount + 1,
     lastWornAt: new Date().toISOString(),
   });
@@ -47,7 +47,7 @@ export function sendToLaundry(garments: Garment[], id: string): Garment[] {
 }
 
 export function markWashed(garments: Garment[], id: string): Garment[] {
-  return patch(garments, id, { status: "clean", skipUntil: null });
+  return patch(garments, id, { status: "active", skipUntil: null });
 }
 
 export function skipForSession(

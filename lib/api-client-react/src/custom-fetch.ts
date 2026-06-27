@@ -1,48 +1,101 @@
+/**
+ * API Client Boundary
+ * 
+ * Provides an `ApiClientFactory` to create configured custom fetch functions.
+ * Centralises token management, runtime adaptations, and error normalisation.
+ */
+
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
 };
 
 export type ErrorType<T = unknown> = ApiError<T>;
-
 export type BodyType<T> = T;
-
-export type AuthTokenGetter = () => Promise<string | null> | string | null;
+export type TokenProvider = () => Promise<string | null> | string | null;
 
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 // ---------------------------------------------------------------------------
-// Module-level configuration
+// ApiClient Factory Configuration
 // ---------------------------------------------------------------------------
 
-let _baseUrl: string | null = null;
-let _authTokenGetter: AuthTokenGetter | null = null;
-
-/**
- * Set a base URL that is prepended to every relative request URL
- * (i.e. paths that start with `/`).
- *
- * Useful for Expo bundles that need to call a remote API server.
- * Pass `null` to clear the base URL.
- */
-export function setBaseUrl(url: string | null): void {
-  _baseUrl = url ? url.replace(/\/+$/, "") : null;
+export interface ApiClientConfig {
+  baseUrl?: string;
+  tokenProvider?: TokenProvider;
+  fetcher?: typeof fetch;
 }
 
-/**
- * Register a getter that supplies a bearer auth token.  Before every fetch
- * the getter is invoked; when it returns a non-null string, an
- * `Authorization: Bearer <token>` header is attached to the request.
- *
- * Useful for Expo bundles making token-gated API calls.
- * Pass `null` to clear the getter.
- *
- * NOTE: This function should never be used in web applications where session
- * token cookies are automatically associated with API calls by the browser.
- */
-export function setAuthTokenGetter(getter: AuthTokenGetter | null): void {
-  _authTokenGetter = getter;
+export type CustomFetchFn = <T = unknown>(
+  input: RequestInfo | URL,
+  options?: CustomFetchOptions
+) => Promise<T>;
+
+export function createApiClient(config: ApiClientConfig = {}): CustomFetchFn {
+  const baseUrl = config.baseUrl ? config.baseUrl.replace(/\/+$/, "") : null;
+  const tokenProvider = config.tokenProvider;
+  const fetchFn = config.fetcher || (typeof fetch !== "undefined" ? fetch.bind(globalThis) : fetch);
+
+  function applyBaseUrl(input: RequestInfo | URL): RequestInfo | URL {
+    if (!baseUrl) return input;
+    const url = resolveUrl(input);
+    if (!url.startsWith("/")) return input;
+
+    const absolute = `${baseUrl}${url}`;
+    if (typeof input === "string") return absolute;
+    if (isUrl(input)) return new URL(absolute);
+    return new Request(absolute, input as Request);
+  }
+
+  return async function customFetch<T = unknown>(
+    input: RequestInfo | URL,
+    options: CustomFetchOptions = {},
+  ): Promise<T> {
+    const processedInput = applyBaseUrl(input);
+    const { responseType = "auto", headers: headersInit, ...init } = options;
+
+    const method = resolveMethod(processedInput, init.method);
+
+    if (init.body != null && (method === "GET" || method === "HEAD")) {
+      throw new TypeError(`customFetch: ${method} requests cannot have a body.`);
+    }
+
+    const headers = mergeHeaders(isRequest(processedInput) ? processedInput.headers : undefined, headersInit);
+
+    if (
+      typeof init.body === "string" &&
+      !headers.has("content-type") &&
+      looksLikeJson(init.body)
+    ) {
+      headers.set("content-type", "application/json");
+    }
+
+    if (responseType === "json" && !headers.has("accept")) {
+      headers.set("accept", DEFAULT_JSON_ACCEPT);
+    }
+
+    if (tokenProvider && !headers.has("authorization")) {
+      const token = await tokenProvider();
+      if (token) {
+        headers.set("authorization", `Bearer ${token}`);
+      }
+    }
+
+    const requestInfo = { method, url: resolveUrl(processedInput) };
+    const response = await fetchFn(processedInput, { ...init, method, headers });
+
+    if (!response.ok) {
+      const errorData = await parseErrorBody(response, method);
+      throw new ApiError(response, errorData, requestInfo);
+    }
+
+    return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  };
 }
+
+// ---------------------------------------------------------------------------
+// Internal HTTP utilities
+// ---------------------------------------------------------------------------
 
 function isRequest(input: RequestInfo | URL): input is Request {
   return typeof Request !== "undefined" && input instanceof Request;
@@ -54,22 +107,8 @@ function resolveMethod(input: RequestInfo | URL, explicitMethod?: string): strin
   return "GET";
 }
 
-// Use loose check for URL — some runtimes (e.g. React Native) polyfill URL
-// differently, so `instanceof URL` can fail.
 function isUrl(input: RequestInfo | URL): input is URL {
   return typeof URL !== "undefined" && input instanceof URL;
-}
-
-function applyBaseUrl(input: RequestInfo | URL): RequestInfo | URL {
-  if (!_baseUrl) return input;
-  const url = resolveUrl(input);
-  // Only prepend to relative paths (starting with /)
-  if (!url.startsWith("/")) return input;
-
-  const absolute = `${_baseUrl}${url}`;
-  if (typeof input === "string") return absolute;
-  if (isUrl(input)) return new URL(absolute);
-  return new Request(absolute, input as Request);
 }
 
 function resolveUrl(input: RequestInfo | URL): string {
@@ -80,14 +119,12 @@ function resolveUrl(input: RequestInfo | URL): string {
 
 function mergeHeaders(...sources: Array<HeadersInit | undefined>): Headers {
   const headers = new Headers();
-
   for (const source of sources) {
     if (!source) continue;
     new Headers(source).forEach((value, key) => {
       headers.set(key, value);
     });
   }
-
   return headers;
 }
 
@@ -111,12 +148,6 @@ function isTextMediaType(mediaType: string | null): boolean {
   );
 }
 
-// Use strict equality: in browsers, `response.body` is `null` when the
-// response genuinely has no content.  In React Native, `response.body` is
-// always `undefined` because the ReadableStream API is not implemented —
-// even when the response carries a full payload readable via `.text()` or
-// `.json()`.  Loose equality (`== null`) matches both `null` and `undefined`,
-// which causes every React Native response to be treated as empty.
 function hasNoBody(response: Response, method: string): boolean {
   if (method === "HEAD") return true;
   if (NO_BODY_STATUS.has(response.status)) return true;
@@ -136,10 +167,8 @@ function looksLikeJson(text: string): boolean {
 
 function getStringField(value: unknown, key: string): string | undefined {
   if (!value || typeof value !== "object") return undefined;
-
   const candidate = (value as Record<string, unknown>)[key];
   if (typeof candidate !== "string") return undefined;
-
   const trimmed = candidate.trim();
   return trimmed === "" ? undefined : trimmed;
 }
@@ -239,11 +268,7 @@ async function parseJsonBody(
 ): Promise<unknown> {
   const raw = await response.text();
   const normalized = stripBom(raw);
-
-  if (normalized.trim() === "") {
-    return null;
-  }
-
+  if (normalized.trim() === "") return null;
   try {
     return JSON.parse(normalized);
   } catch (cause) {
@@ -252,25 +277,15 @@ async function parseJsonBody(
 }
 
 async function parseErrorBody(response: Response, method: string): Promise<unknown> {
-  if (hasNoBody(response, method)) {
-    return null;
-  }
-
+  if (hasNoBody(response, method)) return null;
   const mediaType = getMediaType(response.headers);
-
-  // Fall back to text when blob() is unavailable (e.g. some React Native builds).
   if (mediaType && !isJsonMediaType(mediaType) && !isTextMediaType(mediaType)) {
     return typeof response.blob === "function" ? response.blob() : response.text();
   }
-
   const raw = await response.text();
   const normalized = stripBom(raw);
   const trimmed = normalized.trim();
-
-  if (trimmed === "") {
-    return null;
-  }
-
+  if (trimmed === "") return null;
   if (isJsonMediaType(mediaType) || looksLikeJson(normalized)) {
     try {
       return JSON.parse(normalized);
@@ -278,13 +293,11 @@ async function parseErrorBody(response: Response, method: string): Promise<unkno
       return raw;
     }
   }
-
   return raw;
 }
 
 function inferResponseType(response: Response): "json" | "text" | "blob" {
   const mediaType = getMediaType(response.headers);
-
   if (isJsonMediaType(mediaType)) return "json";
   if (isTextMediaType(mediaType) || mediaType == null) return "text";
   return "blob";
@@ -295,77 +308,50 @@ async function parseSuccessBody(
   responseType: "json" | "text" | "blob" | "auto",
   requestInfo: { method: string; url: string },
 ): Promise<unknown> {
-  if (hasNoBody(response, requestInfo.method)) {
-    return null;
-  }
-
-  const effectiveType =
-    responseType === "auto" ? inferResponseType(response) : responseType;
-
+  if (hasNoBody(response, requestInfo.method)) return null;
+  const effectiveType = responseType === "auto" ? inferResponseType(response) : responseType;
   switch (effectiveType) {
     case "json":
       return parseJsonBody(response, requestInfo);
-
     case "text": {
       const text = await response.text();
       return text === "" ? null : text;
     }
-
     case "blob":
       if (typeof response.blob !== "function") {
         throw new TypeError(
-          "Blob responses are not supported in this runtime. " +
-            "Use responseType \"json\" or \"text\" instead.",
+          "Blob responses are not supported in this runtime. Use responseType \"json\" or \"text\" instead.",
         );
       }
       return response.blob();
   }
 }
 
-export async function customFetch<T = unknown>(
-  input: RequestInfo | URL,
-  options: CustomFetchOptions = {},
-): Promise<T> {
-  input = applyBaseUrl(input);
-  const { responseType = "auto", headers: headersInit, ...init } = options;
+// ---------------------------------------------------------------------------
+// Global Legacy Instances
+// ---------------------------------------------------------------------------
 
-  const method = resolveMethod(input, init.method);
+let _globalBaseUrl: string | null = null;
+let _globalTokenProvider: TokenProvider | null = null;
 
-  if (init.body != null && (method === "GET" || method === "HEAD")) {
-    throw new TypeError(`customFetch: ${method} requests cannot have a body.`);
-  }
-
-  const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
-
-  if (
-    typeof init.body === "string" &&
-    !headers.has("content-type") &&
-    looksLikeJson(init.body)
-  ) {
-    headers.set("content-type", "application/json");
-  }
-
-  if (responseType === "json" && !headers.has("accept")) {
-    headers.set("accept", DEFAULT_JSON_ACCEPT);
-  }
-
-  // Attach bearer token when an auth getter is configured and no
-  // Authorization header has been explicitly provided.
-  if (_authTokenGetter && !headers.has("authorization")) {
-    const token = await _authTokenGetter();
-    if (token) {
-      headers.set("authorization", `Bearer ${token}`);
-    }
-  }
-
-  const requestInfo = { method, url: resolveUrl(input) };
-
-  const response = await fetch(input, { ...init, method, headers });
-
-  if (!response.ok) {
-    const errorData = await parseErrorBody(response, method);
-    throw new ApiError(response, errorData, requestInfo);
-  }
-
-  return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+export function setBaseUrl(url: string | null): void {
+  _globalBaseUrl = url;
 }
+
+export function setAuthTokenGetter(getter: TokenProvider | null): void {
+  _globalTokenProvider = getter;
+}
+
+export type AuthTokenGetter = TokenProvider; // Alias for backwards compatibility
+
+/**
+ * Global legacy fetcher that dynamically uses the configured globals.
+ * Safe to use across generated clients.
+ */
+export const customFetch: CustomFetchFn = (input, options) => {
+  const client = createApiClient({
+    baseUrl: _globalBaseUrl ?? undefined,
+    tokenProvider: _globalTokenProvider ?? undefined,
+  });
+  return client(input, options);
+};

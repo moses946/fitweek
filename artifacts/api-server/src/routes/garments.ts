@@ -1,6 +1,40 @@
 import { Router } from "express";
+import { removeBackground } from "@imgly/background-removal-node";
 
 const router = Router();
+
+// --- Background removal ---
+
+/**
+ * Detects the MIME type from image magic bytes.
+ * @imgly/background-removal-node requires a Blob with a .type set;
+ * passing a bare Buffer results in 'Unsupported format: ' (empty MIME).
+ */
+function detectMimeType(buf: Buffer): string {
+  if (buf[0] === 0xff && buf[1] === 0xd8) return "image/jpeg";
+  if (buf[0] === 0x89 && buf[1] === 0x50) return "image/png";
+  if (buf[0] === 0x52 && buf[1] === 0x49) return "image/webp";
+  if (buf[0] === 0x47 && buf[1] === 0x49) return "image/gif";
+  return "image/jpeg"; // safe default — Vision API accepts JPEG
+}
+
+/**
+ * Strips the background from an image buffer using the local ONNX model.
+ * Returns the processed PNG buffer, or the original buffer on any failure
+ * (soft fallback — classification must never block on this step).
+ */
+async function stripBackground(input: Buffer): Promise<{ buf: Buffer; removed: boolean }> {
+  try {
+    const mime = detectMimeType(input);
+    const blob = new Blob([input], { type: mime });
+    const result = await removeBackground(blob);
+    const buf = Buffer.from(await result.arrayBuffer());
+    return { buf, removed: true };
+  } catch (err) {
+    console.warn("[bg-removal] Failed — falling back to original image.", err);
+    return { buf: input, removed: false };
+  }
+}
 
 // --- Types ---
 
@@ -20,6 +54,11 @@ interface ClassifyResult {
   confidence: number;
   /** The specific Vision label that matched the category, e.g. "T-shirt", "Blazer" */
   matchedLabel: string | null;
+  /**
+   * Base64-encoded PNG with background removed (no data URI prefix).
+   * Undefined if background removal was skipped or failed.
+   */
+  processedImageBase64?: string;
 }
 
 // --- Helpers ---
@@ -253,11 +292,31 @@ router.post("/garments/classify", async (req, res) => {
     return;
   }
 
-  const imageSource = imageUrl
-    ? { source: { imageUri: imageUrl } }
-    : { content: imageBase64 };
-
   try {
+    // --- Step 1: Decode incoming image to a Buffer ---
+    let rawBuf: Buffer;
+    if (imageBase64) {
+      rawBuf = Buffer.from(imageBase64, "base64");
+    } else {
+      // imageUrl path — download the image first
+      const downloadRes = await fetch(imageUrl!);
+      if (!downloadRes.ok) {
+        res.status(400).json({ error: "Could not fetch image from provided imageUrl." });
+        return;
+      }
+      rawBuf = Buffer.from(await downloadRes.arrayBuffer());
+    }
+
+    // --- Step 2: Remove background (soft fallback on failure) ---
+    req.log.info({ bytes: rawBuf.byteLength }, "Removing background");
+    const { buf: processedBuf, removed } = await stripBackground(rawBuf);
+    req.log.info({ removed, bytes: processedBuf.byteLength }, "Background removal done");
+
+    // Re-encode the (possibly processed) buffer for Vision
+    const base64ForVision = processedBuf.toString("base64");
+    const imageSource = { content: base64ForVision };
+
+    // --- Step 3: Call Cloud Vision ---
     const visionRes = await fetch(
       `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
       {
@@ -316,7 +375,15 @@ router.post("/garments/classify", async (req, res) => {
       "Garment classified",
     );
 
-    const result: ClassifyResult = { category, color, tags, confidence, matchedLabel };
+    const result: ClassifyResult = {
+      category,
+      color,
+      tags,
+      confidence,
+      matchedLabel,
+      // Only ship the processed image back if background was actually removed
+      processedImageBase64: removed ? base64ForVision : undefined,
+    };
     res.json(result);
   } catch (err) {
     req.log.error({ err }, "Garment classification failed");

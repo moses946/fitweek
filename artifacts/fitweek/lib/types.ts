@@ -12,7 +12,7 @@ export type GarmentCategory =
   | "accessories"
   | "other";
 
-export type GarmentStatus = "clean" | "worn" | "laundry";
+export type GarmentStatus = "active" | "laundry" | "deleted";
 
 export type OutfitSlotStatus = "draft" | "confirmed";
 
@@ -31,7 +31,7 @@ export interface OutfitSlot {
 
 export interface Garment {
   id: string;
-  imageUri: string;
+  imageUrl: string;
   category: GarmentCategory;
   color: string;
   tags: string[];

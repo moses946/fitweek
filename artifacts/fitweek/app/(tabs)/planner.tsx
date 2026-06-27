@@ -31,6 +31,7 @@ import type { DailyForecast } from "@/lib/weather";
 import type { Garment, OutfitSlot } from "@/lib/types";
 import { selectHeroGarment, callVTO, VtoError } from "@/lib/vto";
 import { buildSuggestionDeck } from "@/lib/suggestionFilter";
+import { API_BASE_URL } from "@/lib/config";
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -210,7 +211,7 @@ function ConfirmedOutfitCard({
         {assembledGarments.map((g) => (
           <Image
             key={g.id}
-            source={{ uri: g.imageUri }}
+            source={{ uri: g.imageUrl }}
             style={styles.outfitThumb}
             contentFit="cover"
           />
@@ -431,9 +432,8 @@ export default function PlannerScreen() {
   };
 
   const getProxyBase = () => {
-    if (typeof window !== "undefined") return "";
-    const domain = process.env.EXPO_PUBLIC_DOMAIN;
-    return domain ? `https://${domain}` : "http://localhost:8080";
+    if (Platform.OS === "web") return "";
+    return API_BASE_URL;
   };
 
   const handleSuggestForDay = async () => {
@@ -472,7 +472,7 @@ export default function PlannerScreen() {
       Alert.alert("All set!", "You have confirmed outfits for every day this week.");
       return;
     }
-    const cleanCount = garments.filter((g) => g.status === "clean" && !g.deletedAt).length;
+    const cleanCount = garments.filter((g) => g.status === "active" && !g.deletedAt).length;
     if (cleanCount < 10) {
       Alert.alert(
         "More clothes needed",
@@ -546,14 +546,14 @@ export default function PlannerScreen() {
       Alert.alert("No garments", "Add some garments to this outfit first.");
       return;
     }
-    console.log("[VTO] hero garment:", hero.name, "category:", hero.category, "imageUri:", hero.imageUri.slice(0, 80));
+    console.log("[VTO] hero garment:", hero.name, "category:", hero.category, "imageUrl:", hero.imageUrl.slice(0, 80));
 
     // Read garment image as base64 to send to the server-side VTO proxy
     let garmentBase64: string;
     try {
-      if (hero.imageUri.startsWith("http")) {
+      if (hero.imageUrl.startsWith("http")) {
         console.log("[VTO] Fetching garment image from remote URL…");
-        const imgRes = await fetch(hero.imageUri);
+        const imgRes = await fetch(hero.imageUrl);
         console.log("[VTO] Garment fetch status:", imgRes.status);
         if (!imgRes.ok) throw new Error(`Garment image fetch failed: ${imgRes.status}`);
         const arrayBuf = await imgRes.arrayBuffer();
@@ -564,7 +564,7 @@ export default function PlannerScreen() {
         console.log("[VTO] Garment base64 length:", garmentBase64.length);
       } else {
         console.log("[VTO] Reading garment image from local file system…");
-        garmentBase64 = await FileSystem.readAsStringAsync(hero.imageUri, {
+        garmentBase64 = await FileSystem.readAsStringAsync(hero.imageUrl, {
           encoding: FileSystem.EncodingType.Base64,
         });
         console.log("[VTO] Garment base64 length (local):", garmentBase64.length);

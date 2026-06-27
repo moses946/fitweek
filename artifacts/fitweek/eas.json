@@ -1,0 +1,42 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://fitweek-api-wrh6da45ta-uc.a.run.app",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://szbfownxvggwsjettckb.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN6YmZvd254dmdnd3NqZXR0Y2tiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MTM5ODIsImV4cCI6MjA5MzI4OTk4Mn0.nv9Mo8QDZGUNZeonpRZ2RSRyGTqyR4UDHlYCPcbNpGo"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://fitweek-api-wrh6da45ta-uc.a.run.app",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://szbfownxvggwsjettckb.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN6YmZvd254dmdnd3NqZXR0Y2tiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MTM5ODIsImV4cCI6MjA5MzI4OTk4Mn0.nv9Mo8QDZGUNZeonpRZ2RSRyGTqyR4UDHlYCPcbNpGo",
+        "EXPO_PUBLIC_PRIVACY_POLICY_URL": "${EXPO_PUBLIC_PRIVACY_POLICY_URL}",
+        "EXPO_PUBLIC_TERMS_URL": "${EXPO_PUBLIC_TERMS_URL}"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal"
+      }
+    }
+  }
+}

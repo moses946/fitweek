@@ -25,6 +25,7 @@ import { useWeather } from "@/contexts/WeatherContext";
 import { useColors } from "@/hooks/useColors";
 import { interleaveByCategory } from "@/lib/suggestionFilter";
 import type { Garment } from "@/lib/types";
+import { API_BASE_URL } from "@/lib/config";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const LOW_DECK_THRESHOLD = 3;
@@ -48,9 +49,8 @@ function getWeekDays(): Date[] {
 }
 
 function getProxyBase(): string {
-  if (typeof window !== "undefined") return "";
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  return domain ? `https://${domain}` : "http://localhost:8080";
+  if (Platform.OS === "web") return "";
+  return API_BASE_URL;
 }
 
 export default function PlanWeekScreen() {
@@ -73,7 +73,7 @@ export default function PlanWeekScreen() {
   sessionPoolRef.current = sessionPool;
 
   useEffect(() => {
-    const clean = garments.filter((g) => g.status === "clean" && !g.deletedAt);
+    const clean = garments.filter((g) => g.status === "active" && !g.deletedAt);
     setLiveDeck(interleaveByCategory(clean));
   }, []);
 
@@ -114,7 +114,7 @@ export default function PlanWeekScreen() {
     const likedList = garments.filter((g) => likedIds.has(g.id));
     const poolForSuggest = likedList.length >= MIN_LIKED
       ? likedList
-      : garments.filter((g) => g.status === "clean" && !g.deletedAt);
+      : garments.filter((g) => g.status === "active" && !g.deletedAt);
 
     if (!poolForSuggest.length) {
       Alert.alert("No garments", "Add some clean garments to your wardrobe first.");
@@ -259,7 +259,7 @@ export default function PlanWeekScreen() {
             {likedGarments.map((g) => (
               <Image
                 key={g.id}
-                source={{ uri: g.imageUri }}
+                source={{ uri: g.imageUrl }}
                 style={[styles.likedThumb, { borderColor: colors.primary }]}
                 contentFit="cover"
               />

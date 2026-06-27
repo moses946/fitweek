@@ -8,16 +8,21 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRootNavigationState, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import * as WebBrowser from "expo-web-browser";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ConfigurationError } from "@/components/ConfigurationError";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { GarmentProvider } from "@/contexts/GarmentContext";
 import { OutfitSlotProvider } from "@/contexts/OutfitSlotContext";
 import { WeatherProvider } from "@/contexts/WeatherContext";
+import { isSupabaseConfigured } from "@/lib/supabase";
+
+WebBrowser.maybeCompleteAuthSession();
 
 SplashScreen.preventAutoHideAsync();
 
@@ -79,6 +84,12 @@ export default function RootLayout() {
   }, [fontsLoaded, fontError]);
 
   if (!fontsLoaded && !fontError) return null;
+
+  if (!__DEV__ && !isSupabaseConfigured) {
+    return (
+      <ConfigurationError message="Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in EAS secrets for production builds." />
+    );
+  }
 
   return (
     <SafeAreaProvider>

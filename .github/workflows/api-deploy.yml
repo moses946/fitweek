@@ -1,0 +1,111 @@
+name: Deploy API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "artifacts/api-server/**"
+      - "lib/db/**"
+      - "lib/api-zod/**"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "pnpm-lock.yaml"
+      - "scripts/deploy/**"
+      - ".github/workflows/api-deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: api-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+  CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'fitweek-api' }}
+  AR_REPOSITORY: ${{ vars.AR_REPOSITORY || 'fitweek' }}
+  AR_IMAGE_NAME: ${{ vars.AR_IMAGE_NAME || 'api' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+
+      - name: Set image tag
+        run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Build image
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          export IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${AR_REPOSITORY}/${AR_IMAGE_NAME}:${IMAGE_TAG}"
+          docker build --platform linux/amd64 -t "${IMAGE_URI}" -f Dockerfile .
+          echo "IMAGE_URI=${IMAGE_URI}" >> "$GITHUB_ENV"
+
+      - name: Push image
+        run: docker push "${IMAGE_URI}"
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Run database migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @workspace/db run migrate
+
+      - name: Deploy to Cloud Run
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          gcloud run deploy "${CLOUD_RUN_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --image="${IMAGE_URI}" \
+            --platform=managed \
+            --port=8080 \
+            --cpu=2 \
+            --memory=2Gi \
+            --timeout=900 \
+            --concurrency=20 \
+            --min-instances=0 \
+            --max-instances=10 \
+            --allow-unauthenticated \
+            --startup-probe=httpGet.path=/api/healthz,httpGet.port=8080,initialDelaySeconds=5,timeoutSeconds=5,periodSeconds=10,failureThreshold=3 \
+            --set-env-vars="NODE_ENV=production" \
+            --set-secrets="\
+          SUPABASE_URL=${{ vars.SECRET_SUPABASE_URL || 'fitweek-supabase-url' }}:latest,\
+          SUPABASE_SERVICE_ROLE_KEY=${{ vars.SECRET_SUPABASE_SERVICE_ROLE_KEY || 'fitweek-supabase-service-role-key' }}:latest,\
+          DATABASE_POOL_URL=${{ vars.SECRET_DATABASE_POOL_URL || 'fitweek-database-pool-url' }}:latest,\
+          OWM_API_KEY=${{ vars.SECRET_OWM_API_KEY || 'fitweek-owm-api-key' }}:latest,\
+          GOOGLE_CLOUD_VISION_API_KEY=${{ vars.SECRET_GOOGLE_CLOUD_VISION_API_KEY || 'fitweek-google-vision-api-key' }}:latest,\
+          RESET_PASSWORD_REDIRECT_URL=${{ vars.SECRET_RESET_PASSWORD_REDIRECT_URL || 'fitweek-reset-password-redirect-url' }}:latest"
+
+      - name: Smoke test healthz
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          SERVICE_URL="$(gcloud run services describe "${CLOUD_RUN_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --format='value(status.url)')"
+          curl -fsS "${SERVICE_URL}/api/healthz"

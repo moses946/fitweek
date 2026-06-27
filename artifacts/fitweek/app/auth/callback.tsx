@@ -3,6 +3,7 @@ import React, { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 
 import { supabase } from "@/lib/supabase";
+import colors from "@/constants/colors";
 
 export default function AuthCallback() {
   const router = useRouter();
@@ -26,8 +27,8 @@ export default function AuthCallback() {
   }, []);
 
   return (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-      <ActivityIndicator size="large" color="#7C3AED" />
+    <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: "center", alignItems: "center" }}>
+      <ActivityIndicator size="large" color={colors.primary} />
     </View>
   );
 }

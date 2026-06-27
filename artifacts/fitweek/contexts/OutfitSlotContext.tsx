@@ -1,33 +1,9 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { OutfitSlotStore, OutfitSlotState } from "../lib/outfitSlotStore";
+import { useGarments } from "./GarmentContext";
+import { OutfitSlot } from "../lib/types";
 
-import { useGarments } from "@/contexts/GarmentContext";
-import {
-  addGarmentToSlot as _add,
-  removeGarmentFromSlot as _remove,
-  confirmSlot as _confirm,
-  clearSlot as _clear,
-  renameSlot as _rename,
-  cleanupExpiredDrafts,
-  getOrCreateDraftSlot,
-  getConfirmedGarmentIds,
-  markAllWorn as _markAllWorn,
-} from "@/lib/outfitSlots";
-import { scheduleSundayPlannerNotification } from "@/lib/outfitSlotNotifications";
-import { saveVTOResult as _saveVTO } from "@/lib/vto";
-import type { OutfitSlot } from "@/lib/types";
-
-const STORAGE_KEY = "@fitweek/outfit_slots_v1";
-
-interface OutfitSlotContextValue {
-  slots: OutfitSlot[];
-  isLoading: boolean;
+export interface OutfitSlotContextValue extends OutfitSlotState {
   getSlotForDate: (date: string) => OutfitSlot | undefined;
   getOrCreateDraft: (date: string) => Promise<OutfitSlot>;
   addGarmentToSlot: (slotId: string, garmentId: string) => Promise<void>;
@@ -37,167 +13,46 @@ interface OutfitSlotContextValue {
   renameSlot: (slotId: string, name: string) => Promise<void>;
   markAllWornInSlot: (slotId: string) => Promise<void>;
   updateSlotVtoImage: (slotId: string, vtoImageUrl: string) => Promise<void>;
-  /** IDs of garments locked into confirmed slots (excluding a given date) */
   getConfirmedGarmentIds: (excludeDate?: string) => Set<string>;
-  /** Write draft slots for multiple dates at once (for weekly AI suggest). Returns the written slots. */
   bulkWriteDrafts: (suggestions: Record<string, string[]>) => Promise<OutfitSlot[]>;
 }
 
 const OutfitSlotContext = createContext<OutfitSlotContextValue | null>(null);
 
+const store = new OutfitSlotStore();
+
 export function OutfitSlotProvider({ children }: { children: React.ReactNode }) {
   const { garments, markWorn } = useGarments();
-  const [slots, setSlots] = useState<OutfitSlot[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [state, setState] = useState<OutfitSlotState>(store.getState());
 
-  // Load + cleanup on mount
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => {
-        const loaded: OutfitSlot[] = raw ? (JSON.parse(raw) as OutfitSlot[]) : [];
-        const cleaned = cleanupExpiredDrafts(loaded, new Date());
-        setSlots(cleaned);
-        // Persist cleanup immediately
-        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned)).catch(() => {});
-      })
-      .catch(() => {})
-      .finally(() => setIsLoading(false));
-
-    // Schedule Sunday planner notification (best-effort)
-    scheduleSundayPlannerNotification().catch(() => {});
+    store.init();
+    return store.subscribe(setState);
   }, []);
 
-  const persist = useCallback(async (next: OutfitSlot[]) => {
-    setSlots(next);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  }, []);
+  const value: OutfitSlotContextValue = {
+    ...state,
+    getSlotForDate: (date) => store.getSlotForDate(date),
+    getOrCreateDraft: (date) => store.createDraft(date),
+    addGarmentToSlot: (slotId, garmentId) => store.addGarment(slotId, garmentId),
+    removeGarmentFromSlot: (slotId, garmentId) => store.removeGarment(slotId, garmentId),
+    confirmSlot: (slotId) => store.confirmSlot(slotId, garments),
+    clearSlot: (slotId) => store.clearSlot(slotId),
+    renameSlot: (slotId, name) => store.renameSlot(slotId, name),
+    updateSlotVtoImage: (slotId, url) => store.saveVtoResult(slotId, url),
+    getConfirmedGarmentIds: (excludeDate) => store.getConfirmedGarmentIds(excludeDate),
+    bulkWriteDrafts: (suggestions) => store.bulkImport(suggestions),
+    markAllWornInSlot: async (slotId) => {
+      const ids = await store.markAllWorn(slotId);
+      await Promise.all(ids.map(markWorn));
+    }
+  };
 
-  const getSlotForDate = useCallback(
-    (date: string) => slots.find((s) => s.date === date),
-    [slots],
-  );
-
-  const getOrCreateDraft = useCallback(
-    async (date: string): Promise<OutfitSlot> => {
-      const { slot, slots: next } = getOrCreateDraftSlot(slots, date);
-      if (next !== slots) await persist(next);
-      return slot;
-    },
-    [slots, persist],
-  );
-
-  const addGarmentToSlot = useCallback(
-    async (slotId: string, garmentId: string) => {
-      await persist(_add(slots, slotId, garmentId));
-    },
-    [slots, persist],
-  );
-
-  const removeGarmentFromSlot = useCallback(
-    async (slotId: string, garmentId: string) => {
-      await persist(_remove(slots, slotId, garmentId));
-    },
-    [slots, persist],
-  );
-
-  const confirmSlot = useCallback(
-    async (slotId: string) => {
-      await persist(_confirm(slots, slotId, garments));
-    },
-    [slots, garments, persist],
-  );
-
-  const clearSlot = useCallback(
-    async (slotId: string) => {
-      await persist(_clear(slots, slotId));
-    },
-    [slots, persist],
-  );
-
-  const renameSlot = useCallback(
-    async (slotId: string, name: string) => {
-      await persist(_rename(slots, slotId, name));
-    },
-    [slots, persist],
-  );
-
-  const markAllWornInSlot = useCallback(
-    async (slotId: string) => {
-      const slot = slots.find((s) => s.id === slotId);
-      if (!slot) return;
-      await Promise.all(slot.garmentIds.map((id) => markWorn(id)));
-    },
-    [slots, markWorn],
-  );
-
-  const updateSlotVtoImage = useCallback(
-    async (slotId: string, vtoImageUrl: string) => {
-      await persist(_saveVTO(slots, slotId, vtoImageUrl));
-    },
-    [slots, persist],
-  );
-
-  const getConfirmedIds = useCallback(
-    (excludeDate?: string) => getConfirmedGarmentIds(slots, excludeDate),
-    [slots],
-  );
-
-  const bulkWriteDrafts = useCallback(
-    async (suggestions: Record<string, string[]>): Promise<OutfitSlot[]> => {
-      let next = [...slots];
-      const written: OutfitSlot[] = [];
-      for (const [date, garmentIds] of Object.entries(suggestions)) {
-        if (!garmentIds.length) continue;
-        // Don't overwrite already-confirmed slots
-        const existing = next.find((s) => s.date === date);
-        if (existing?.status === "confirmed") continue;
-        // Replace or create draft — preserve existing vtoImageUrl so background VTO isn't wiped
-        const draft: OutfitSlot = {
-          id: existing?.id ?? (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)),
-          date,
-          garmentIds,
-          status: "draft",
-          name: null,
-          createdAt: existing?.createdAt ?? new Date().toISOString(),
-          vtoImageUrl: existing?.vtoImageUrl ?? null,
-        };
-        next = existing
-          ? next.map((s) => (s.date === date ? draft : s))
-          : [draft, ...next];
-        written.push(draft);
-      }
-      await persist(next);
-      return written;
-    },
-    [slots, persist],
-  );
-
-  return (
-    <OutfitSlotContext.Provider
-      value={{
-        slots,
-        isLoading,
-        getSlotForDate,
-        getOrCreateDraft,
-        addGarmentToSlot,
-        removeGarmentFromSlot,
-        confirmSlot,
-        clearSlot,
-        renameSlot,
-        markAllWornInSlot,
-        updateSlotVtoImage,
-        getConfirmedGarmentIds: getConfirmedIds,
-        bulkWriteDrafts,
-      }}
-    >
-      {children}
-    </OutfitSlotContext.Provider>
-  );
+  return <OutfitSlotContext.Provider value={value}>{children}</OutfitSlotContext.Provider>;
 }
 
-export function useOutfitSlots(): OutfitSlotContextValue {
+export function useOutfitSlots() {
   const ctx = useContext(OutfitSlotContext);
-  if (!ctx)
-    throw new Error("useOutfitSlots must be used inside OutfitSlotProvider");
+  if (!ctx) throw new Error("useOutfitSlots must be used inside OutfitSlotProvider");
   return ctx;
 }

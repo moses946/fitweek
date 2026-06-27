@@ -185,7 +185,7 @@ export function generateShareCard(
   return {
     type: "collage",
     primaryImageUri: null,
-    garmentImageUris: liveGarments.map((g) => g.imageUri),
+    garmentImageUris: liveGarments.map((g) => g.imageUrl),
     dayLabel,
     weatherSummary,
   };

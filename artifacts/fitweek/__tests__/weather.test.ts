@@ -1,18 +1,13 @@
 /**
  * Issue 4 — TDD: weather service unit tests (Tests 1–3 from plan)
  *
- * Mocks: global fetch + AsyncStorage.
+ * Mocks: global fetch + storage adapter (in-memory).
  * Run: pnpm --filter @workspace/fitweek test
  */
 
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
-jest.mock("@react-native-async-storage/async-storage", () =>
-  require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
-);
-
 import { getWeatherForecast } from "../lib/weather";
 import type { DailyForecast } from "../lib/weather";
+import storage from "../lib/storage";
 
 const BASE = "http://localhost-test";
 const LAT = 51.5;
@@ -31,7 +26,7 @@ const mockDays: DailyForecast[] = Array.from({ length: 7 }, (_, i) => ({
 const CACHE_KEY = `@fitweek/weather_v1_${LAT.toFixed(1)}_${LON.toFixed(1)}`;
 
 beforeEach(async () => {
-  await AsyncStorage.clear();
+  storage.resetStorage();
   jest.restoreAllMocks();
 });
 
@@ -59,7 +54,7 @@ describe("getWeatherForecast — Test 1: success", () => {
 
     await getWeatherForecast(LAT, LON, BASE);
 
-    const raw = await AsyncStorage.getItem(CACHE_KEY);
+    const raw = await storage.getString(CACHE_KEY);
     expect(raw).not.toBeNull();
     const entry = JSON.parse(raw!);
     expect(entry.days).toHaveLength(7);
@@ -71,7 +66,7 @@ describe("getWeatherForecast — Test 1: success", () => {
 describe("getWeatherForecast — Test 2: cache fallback", () => {
   it("returns cached data with usingCache=true when fetch fails", async () => {
     // Prime a valid cache entry (1 second old — well within 24h TTL)
-    await AsyncStorage.setItem(
+    await storage.setString(
       CACHE_KEY,
       JSON.stringify({ fetchedAt: Date.now() - 1_000, days: mockDays }),
     );
@@ -87,7 +82,7 @@ describe("getWeatherForecast — Test 2: cache fallback", () => {
 
   it("ignores an expired cache (> 24h old) and returns unavailable", async () => {
     const MS_25H = 25 * 60 * 60 * 1000;
-    await AsyncStorage.setItem(
+    await storage.setString(
       CACHE_KEY,
       JSON.stringify({ fetchedAt: Date.now() - MS_25H, days: mockDays }),
     );

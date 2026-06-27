@@ -9,7 +9,10 @@
  */
 
 import * as FileSystem from "expo-file-system/legacy";
+import { Platform } from "react-native";
 
+import { API_BASE_URL } from "./config";
+import { supabase, isSupabaseConfigured } from "./supabase";
 import { Garment, GarmentCategory, OutfitSlot } from "./types";
 
 // ── Error type ────────────────────────────────────────────────────────────────
@@ -52,12 +55,12 @@ export function selectHeroGarment(garments: Garment[]): Garment | null {
 const VTO_TIMEOUT_MS = 120_000;
 
 function getProxyUrl(): string {
-  // On web, relative paths work; on native we need the full domain
-  if (typeof window !== "undefined") {
+  // On web, relative paths work; on native we need the full URL
+  if (Platform.OS === "web") {
     return "/api/vto/tryon";
   }
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  return domain ? `https://${domain}/api/vto/tryon` : "http://localhost:8080/api/vto/tryon";
+  const apiBase = API_BASE_URL;
+  return `${apiBase}/api/vto/tryon`;
 }
 
 function combineSignals(external: AbortSignal | undefined, internal: AbortSignal): AbortSignal {
@@ -116,10 +119,21 @@ export async function callVTO(
   }
 
   try {
+    // Attach the Supabase session token so requireAuth passes on the server
+    let authHeader = "";
+    if (isSupabaseConfigured) {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (token) authHeader = `Bearer ${token}`;
+    }
+
     console.log("[VTO:lib] POSTing to proxy…");
     const res = await fetch(proxyUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(authHeader ? { Authorization: authHeader } : {}),
+      },
       body: JSON.stringify(payload),
       signal: combined,
     });
@@ -158,8 +172,8 @@ export async function callVTO(
       }
     }
 
-    if (!resultUrl) {
-      console.error("[VTO:lib] resultUrl missing in response body:", body);
+    if (!resultUrl || typeof resultUrl !== "string") {
+      console.error("[VTO:lib] resultUrl missing or not a string in response body:", body);
       throw new VtoError("VTO_ERROR", "No resultUrl in proxy response");
     }
     console.log("[VTO:lib] resultUrl (fallback):", resultUrl.slice(0, 100));

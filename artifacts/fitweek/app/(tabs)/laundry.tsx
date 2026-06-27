@@ -1,6 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import React, { useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Platform,
   Pressable,
@@ -13,20 +15,31 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Garment, GarmentStatus, useGarments } from "@/contexts/GarmentContext";
 import { useColors } from "@/hooks/useColors";
 
+// Aligned with DB enum: active | laundry | deleted
 const STATUS_COLOR: Record<GarmentStatus, string> = {
-  clean: "#10B981",
-  worn: "#64748B",
+  active: "#10B981",
   laundry: "#0EA5E9",
+  deleted: "#64748B",
 };
 
 const STATUS_LABEL: Record<GarmentStatus, string> = {
-  clean: "Clean",
-  worn: "Worn",
+  active: "Clean",
   laundry: "In laundry",
+  deleted: "Removed",
 };
 
-function LaundryCard({ garment, onMarkClean }: { garment: Garment; onMarkClean: () => void }) {
+function LaundryCard({
+  garment,
+  onMarkClean,
+  isActing,
+}: {
+  garment: Garment;
+  onMarkClean: () => void;
+  isActing: boolean;
+}) {
   const palette = useColors();
+  const [imgError, setImgError] = useState(false);
+
   return (
     <View
       style={[
@@ -37,7 +50,18 @@ function LaundryCard({ garment, onMarkClean }: { garment: Garment; onMarkClean: 
         },
       ]}
     >
-      <Image source={{ uri: garment.imageUri }} style={styles.cardImage} contentFit="cover" />
+      {imgError || !garment.imageUrl ? (
+        <View style={[styles.cardImage, styles.imageFallback, { backgroundColor: palette.surfaceWash }]}>
+          <Feather name="image" size={20} color={palette.mutedForeground} />
+        </View>
+      ) : (
+        <Image
+          source={{ uri: garment.imageUrl }}
+          style={styles.cardImage}
+          contentFit="cover"
+          onError={() => setImgError(true)}
+        />
+      )}
       <View style={styles.cardBody}>
         <Text style={[styles.cardName, { color: palette.foreground }]} numberOfLines={1}>
           {garment.name}
@@ -46,19 +70,24 @@ function LaundryCard({ garment, onMarkClean }: { garment: Garment; onMarkClean: 
           <View style={[styles.statusDot, { backgroundColor: STATUS_COLOR[garment.status] }]} />
           <Text style={[styles.statusText, { color: palette.mutedForeground }]}>
             {STATUS_LABEL[garment.status]}
+            {garment.wearCount > 0 ? ` · ${garment.wearCount}× worn` : ""}
           </Text>
         </View>
       </View>
 
-      {(garment.status === "laundry" || garment.status === "worn") && (
+      {garment.status === "laundry" && (
         <Pressable
-          onPress={onMarkClean}
+          onPress={isActing ? undefined : onMarkClean}
           style={({ pressed }) => [
             styles.cleanBtn,
-            { borderColor: palette.border, opacity: pressed ? 0.7 : 1 },
+            { borderColor: palette.border, opacity: (pressed || isActing) ? 0.6 : 1 },
           ]}
         >
-          <Text style={[styles.cleanBtnText, { color: palette.foreground }]}>Mark as clean</Text>
+          {isActing ? (
+            <ActivityIndicator size="small" color={palette.foreground} />
+          ) : (
+            <Text style={[styles.cleanBtnText, { color: palette.foreground }]}>Mark clean</Text>
+          )}
         </Pressable>
       )}
     </View>
@@ -68,10 +97,21 @@ function LaundryCard({ garment, onMarkClean }: { garment: Garment; onMarkClean: 
 export default function LaundryScreen() {
   const palette = useColors();
   const insets = useSafeAreaInsets();
-  const { garments, markClean } = useGarments();
+  const { garments, isLoading, operationPending, markClean } = useGarments();
+  const [actingId, setActingId] = useState<string | null>(null);
 
-  const dirty = garments.filter((g) => g.status === "worn" || g.status === "laundry");
+  // Show garments that are in laundry only (worn no longer exists as a status)
+  const dirty = garments.filter((g) => g.deletedAt === null && g.status === "laundry");
   const count = dirty.length;
+
+  const handleMarkClean = async (id: string) => {
+    setActingId(id);
+    try {
+      await markClean(id);
+    } finally {
+      setActingId(null);
+    }
+  };
 
   return (
     <View
@@ -92,9 +132,17 @@ export default function LaundryScreen() {
             </Text>
           </View>
         )}
+        {operationPending && (
+          <ActivityIndicator size="small" color={palette.accent} style={styles.headerSpinner} />
+        )}
       </View>
 
-      {count === 0 ? (
+      {isLoading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color={palette.accent} />
+          <Text style={[styles.loadingText, { color: palette.mutedForeground }]}>Loading laundry…</Text>
+        </View>
+      ) : count === 0 ? (
         <View style={styles.emptyState}>
           <Feather name="check-circle" size={48} color={palette.statusClean} />
           <Text style={[styles.emptyTitle, { color: palette.foreground }]}>
@@ -113,7 +161,11 @@ export default function LaundryScreen() {
             { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 80 },
           ]}
           renderItem={({ item }) => (
-            <LaundryCard garment={item} onMarkClean={() => markClean(item.id)} />
+            <LaundryCard
+              garment={item}
+              onMarkClean={() => handleMarkClean(item.id)}
+              isActing={actingId === item.id}
+            />
           )}
         />
       )}
@@ -138,6 +190,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   badgeText: { fontSize: 12, fontFamily: "Poppins_500Medium" },
+  headerSpinner: { marginLeft: "auto" },
+  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  loadingText: { fontSize: 14, fontFamily: "Poppins_400Regular" },
   emptyState: {
     flex: 1,
     alignItems: "center",
@@ -164,6 +219,7 @@ const styles = StyleSheet.create({
     paddingRight: 14,
   },
   cardImage: { width: 64, height: 64 },
+  imageFallback: { alignItems: "center", justifyContent: "center" },
   cardBody: { flex: 1, gap: 4 },
   cardName: { fontSize: 14, fontFamily: "Poppins_500Medium" },
   statusRow: { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -176,6 +232,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
+    minWidth: 84,
   },
   cleanBtnText: { fontSize: 12, fontFamily: "Poppins_500Medium" },
 });

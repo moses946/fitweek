@@ -4,40 +4,103 @@ import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { z } from "zod";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { API_BASE_URL, PRIVACY_POLICY_URL, TERMS_URL } from "@/lib/config";
 import colors from "@/constants/colors";
+import { ErrorBanner } from "@/components/ErrorBanner";
+
+const signInSchema = z.object({
+  email: z.string().email("Please enter a valid email address."),
+  password: z.string().min(1, "Please enter your password."),
+});
 
 export default function SignInScreen() {
   const insets = useSafeAreaInsets();
-  const { signIn } = useAuth();
+  const router = useRouter();
+  const { signIn, signInWithEmail } = useAuth();
+  
   const [isLoading, setIsLoading] = useState(false);
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const handleGoogleSignIn = async () => {
     if (!isSupabaseConfigured) {
-      Alert.alert(
-        "Setup required",
-        "Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your .env file to enable sign-in.",
-      );
+      setErrorMsg("Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your .env file to enable sign-in.");
       return;
     }
+    setErrorMsg(null);
     setIsLoading(true);
     try {
       await signIn();
     } catch (err) {
-      Alert.alert(
-        "Sign-in failed",
-        err instanceof Error ? err.message : "Something went wrong. Please try again.",
-      );
+      setErrorMsg(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmailSignIn = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    const parsed = signInSchema.safeParse({ email: email.trim(), password });
+    if (!parsed.success) {
+      setErrorMsg(parsed.error.errors[0].message);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await signInWithEmail(parsed.data.email, parsed.data.password);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Invalid email or password.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    
+    if (!email.trim() || !z.string().email().safeParse(email.trim()).success) {
+      setErrorMsg("Please enter a valid email address first to reset your password.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      
+      const data = await res.json().catch(() => ({}));
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to request password reset.");
+      }
+      
+      setSuccessMsg(data.message || "Password reset link sent. Check your inbox.");
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setIsLoading(false);
     }
@@ -56,7 +119,8 @@ export default function SignInScreen() {
         },
       ]}
     >
-      {!isSupabaseConfigured && (
+      {/* Dev-only banner - hidden in production if configured */}
+      {__DEV__ && !isSupabaseConfigured && (
         <View style={styles.banner}>
           <Feather name="alert-circle" size={13} color="rgba(255,255,255,0.8)" />
           <Text style={styles.bannerText}>
@@ -82,7 +146,6 @@ export default function SignInScreen() {
           style={styles.heroImage}
           contentFit="cover"
         />
-        {/* Subtle gradient fade at top and bottom so image blends into background */}
         <LinearGradient
           colors={["rgba(139,47,245,0.55)", "transparent"]}
           style={styles.heroFadeTop}
@@ -102,23 +165,121 @@ export default function SignInScreen() {
 
       {/* CTA */}
       <View style={styles.bottom}>
-        <Pressable
-          testID="google-sign-in-button"
-          onPress={handleGoogleSignIn}
-          disabled={isLoading}
-          style={({ pressed }) => [styles.ctaButton, { opacity: pressed ? 0.9 : 1 }]}
-        >
-          {isLoading ? (
-            <ActivityIndicator color="#1A1F36" />
-          ) : (
-            <View style={styles.ctaInner}>
-              <AntDesign name="google" size={18} color="#1A1F36" />
-              <Text style={styles.ctaLabel}>Continue with Google</Text>
+        <ErrorBanner message={errorMsg} onDismiss={() => setErrorMsg(null)} type="error" />
+        <ErrorBanner message={successMsg} onDismiss={() => setSuccessMsg(null)} type="success" />
+
+        {showEmailForm ? (
+          <View style={styles.emailForm}>
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor="rgba(255,255,255,0.5)"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+              editable={!isLoading}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor="rgba(255,255,255,0.5)"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoComplete="password"
+              editable={!isLoading}
+            />
+            
+            <View style={styles.forgotPasswordRow}>
+              <Pressable onPress={handleForgotPassword} disabled={isLoading} hitSlop={8}>
+                <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+              </Pressable>
             </View>
-          )}
-        </Pressable>
+
+            <Pressable
+              onPress={handleEmailSignIn}
+              disabled={isLoading}
+              style={({ pressed }) => [styles.ctaButton, { opacity: pressed ? 0.9 : 1 }]}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#1A1F36" />
+              ) : (
+                <Text style={styles.ctaLabel}>Sign in</Text>
+              )}
+            </Pressable>
+            
+            <Pressable 
+              onPress={() => router.push("/(auth)/sign-up")} 
+              disabled={isLoading}
+              style={styles.signUpLink}
+              hitSlop={8}
+            >
+              <Text style={styles.signUpText}>Don't have an account? <Text style={styles.signUpTextBold}>Sign up</Text></Text>
+            </Pressable>
+
+            <Pressable onPress={() => { setShowEmailForm(false); setErrorMsg(null); setSuccessMsg(null); }} disabled={isLoading} style={styles.backButton}>
+              <Feather name="chevron-left" size={16} color="rgba(255,255,255,0.85)" />
+              <Text style={styles.toggleText}>Back to Google sign-in</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            <Pressable
+              testID="google-sign-in-button"
+              onPress={handleGoogleSignIn}
+              disabled={isLoading}
+              style={({ pressed }) => [styles.ctaButton, { opacity: pressed ? 0.9 : 1 }]}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#1A1F36" />
+              ) : (
+                <View style={styles.ctaInner}>
+                  <AntDesign name="google" size={18} color="#1A1F36" />
+                  <Text style={styles.ctaLabel}>Continue with Google</Text>
+                </View>
+              )}
+            </Pressable>
+            
+            <Pressable onPress={() => { setShowEmailForm(true); setErrorMsg(null); setSuccessMsg(null); }} disabled={isLoading}>
+              <Text style={styles.toggleText}>Use email & password instead</Text>
+            </Pressable>
+            
+            <Pressable 
+              onPress={() => router.push("/(auth)/sign-up")} 
+              disabled={isLoading}
+              hitSlop={8}
+            >
+              <Text style={styles.signUpText}>Don't have an account? <Text style={styles.signUpTextBold}>Sign up</Text></Text>
+            </Pressable>
+          </>
+        )}
         <Text style={styles.legal}>
-          By continuing you agree to our Terms of Service and Privacy Policy.
+          By continuing you agree to our{" "}
+          {TERMS_URL ? (
+            <Text
+              style={styles.legalLink}
+              onPress={() => Linking.openURL(TERMS_URL)}
+            >
+              Terms of Service
+            </Text>
+          ) : (
+            "Terms of Service"
+          )}{" "}
+          and{" "}
+          {PRIVACY_POLICY_URL ? (
+            <Text
+              style={styles.legalLink}
+              onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
+            >
+              Privacy Policy
+            </Text>
+          ) : (
+            "Privacy Policy"
+          )}
+          .
         </Text>
       </View>
     </LinearGradient>
@@ -211,7 +372,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
 
-  bottom: { paddingHorizontal: 24, paddingTop: 20, gap: 14 },
+  bottom: { paddingHorizontal: 24, paddingTop: 10, paddingBottom: 10, gap: 14 },
   ctaButton: {
     height: 52,
     borderRadius: 12,
@@ -229,11 +390,62 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     color: "#1A1F36",
   },
+  emailForm: { gap: 10 },
+  input: {
+    height: 48,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    color: "#FFFFFF",
+    fontFamily: "Poppins_400Regular",
+    fontSize: 14,
+  },
+  forgotPasswordRow: {
+    alignItems: "flex-end",
+    marginTop: -4,
+    marginBottom: 4,
+  },
+  forgotPasswordText: {
+    fontSize: 13,
+    fontFamily: "Poppins_500Medium",
+    color: "rgba(255,255,255,0.9)",
+  },
+  signUpLink: {
+    alignItems: "center",
+    marginVertical: 4,
+  },
+  signUpText: {
+    fontSize: 14,
+    fontFamily: "Poppins_400Regular",
+    color: "rgba(255,255,255,0.8)",
+  },
+  signUpTextBold: {
+    fontFamily: "Poppins_600SemiBold",
+    color: "#FFFFFF",
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 6,
+  },
+  toggleText: {
+    fontSize: 13,
+    fontFamily: "Poppins_500Medium",
+    color: "rgba(255,255,255,0.85)",
+  },
   legal: {
     fontSize: 12,
     fontFamily: "Poppins_400Regular",
     color: "rgba(255,255,255,0.6)",
     textAlign: "center",
     lineHeight: 17,
+  },
+  legalLink: {
+    textDecorationLine: "underline",
+    color: "rgba(255,255,255,0.85)",
   },
 });

@@ -98,7 +98,7 @@ export function SwipeCard({
       <Animated.View style={[styles.card, { backgroundColor: colors.card }, animatedCard]}>
         {/* Garment image — top 65% */}
         <Image
-          source={{ uri: garment.imageUri }}
+          source={{ uri: garment.imageUrl }}
           style={styles.image}
           contentFit="cover"
         />
@@ -156,7 +156,7 @@ export function BackCard({
       ]}
     >
       <Image
-        source={{ uri: garment.imageUri }}
+        source={{ uri: garment.imageUrl }}
         style={styles.image}
         contentFit="cover"
       />

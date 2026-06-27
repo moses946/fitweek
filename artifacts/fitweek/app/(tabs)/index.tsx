@@ -5,6 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   FlatList,
@@ -34,9 +35,9 @@ const CATEGORIES: { key: GarmentCategory | "all"; label: string }[] = [
 ];
 
 const STATUS_COLOR: Record<GarmentStatus, string> = {
-  clean: "#10B981",
-  worn: "#64748B",
+  active: "#10B981",
   laundry: "#0EA5E9",
+  deleted: "#64748B",
 };
 
 interface UndoToastProps {
@@ -64,24 +65,38 @@ function UndoToast({ name, onUndo, opacity }: UndoToastProps) {
 function GarmentCard({
   garment,
   onLongPress,
+  disabled,
 }: {
   garment: Garment;
   onLongPress: () => void;
+  disabled?: boolean;
 }) {
   const colors = useColors();
   const today = new Date();
   const skipped = isSkippedToday(garment, today) || isSkippedUntil(garment, today);
+  const [imgError, setImgError] = useState(false);
 
   return (
     <Pressable
       style={[
         styles.card,
-        { backgroundColor: colors.card, borderColor: colors.border, opacity: skipped ? 0.5 : 1 },
+        { backgroundColor: colors.card, borderColor: colors.border, opacity: (skipped || disabled) ? 0.5 : 1 },
       ]}
-      onLongPress={onLongPress}
+      onLongPress={disabled ? undefined : onLongPress}
       delayLongPress={400}
     >
-      <Image source={{ uri: garment.imageUri }} style={styles.cardImage} contentFit="cover" />
+      {imgError || !garment.imageUrl ? (
+        <View style={[styles.cardImage, styles.imageFallback, { backgroundColor: colors.surfaceWash }]}>
+          <Feather name="image" size={28} color={colors.mutedForeground} />
+        </View>
+      ) : (
+        <Image
+          source={{ uri: garment.imageUrl }}
+          style={styles.cardImage}
+          contentFit="cover"
+          onError={() => setImgError(true)}
+        />
+      )}
       {skipped && (
         <View style={[styles.skippedBadge, { backgroundColor: colors.surfaceWash }]}>
           <Text style={[styles.skippedText, { color: colors.mutedForeground }]}>Skipped</Text>
@@ -113,6 +128,7 @@ export default function ClosetScreen() {
   const {
     garments,
     isLoading,
+    operationPending,
     markWorn,
     sendToLaundry,
     markClean,
@@ -171,9 +187,9 @@ export default function ClosetScreen() {
 
     Alert.alert(garment.name, undefined, [
       {
-        text: garment.status === "clean" ? "Mark as worn" : "Mark as clean",
+        text: garment.status === "active" ? "Mark as worn" : "Mark as clean",
         onPress: () =>
-          garment.status === "clean" ? markWorn(garment.id) : markClean(garment.id),
+          garment.status === "active" ? markWorn(garment.id) : markClean(garment.id),
       },
       { text: "Send to laundry", onPress: () => sendToLaundry(garment.id) },
       ...(!currentlySkipped
@@ -256,7 +272,13 @@ export default function ClosetScreen() {
       </ScrollView>
 
       {/* Content */}
-      {visible.length === 0 && !isLoading ? (
+      {isLoading ? (
+        <View style={styles.skeletonGrid}>
+          {[0, 1, 2, 3].map((i) => (
+            <View key={i} style={[styles.skeletonCard, { backgroundColor: colors.surfaceWash }]} />
+          ))}
+        </View>
+      ) : visible.length === 0 ? (
         <View style={styles.emptyState}>
           <View style={[styles.emptyIconWrap, { backgroundColor: colors.surfaceWash }]}>
             <Feather name="shopping-bag" size={32} color={colors.primary} />
@@ -277,8 +299,7 @@ export default function ClosetScreen() {
           <View style={styles.legend}>
             {(
               [
-                ["clean", "#10B981", "Clean"],
-                ["worn", "#64748B", "Worn"],
+                ["active", "#10B981", "Clean"],
                 ["laundry", "#0EA5E9", "In laundry"],
               ] as [string, string, string][]
             ).map(([key, color, label]) => (
@@ -300,8 +321,20 @@ export default function ClosetScreen() {
           ]}
           columnWrapperStyle={styles.row}
           renderItem={({ item }) => (
-            <GarmentCard garment={item} onLongPress={() => handleLongPress(item)} />
+            <GarmentCard
+              garment={item}
+              onLongPress={() => handleLongPress(item)}
+              disabled={operationPending}
+            />
           )}
+          ListHeaderComponent={
+            operationPending ? (
+              <View style={styles.operationBar}>
+                <ActivityIndicator size="small" color={colors.accent} />
+                <Text style={[styles.operationText, { color: colors.mutedForeground }]}>Updating wardrobe…</Text>
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={styles.filteredEmpty}>
               <Text style={[styles.filteredEmptyText, { color: colors.mutedForeground }]}>
@@ -381,6 +414,30 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   cardImage: { width: "100%", aspectRatio: 0.75 },
+  imageFallback: { alignItems: "center", justifyContent: "center" },
+  skeletonGrid: {
+    flex: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    gap: 10,
+    alignContent: "flex-start",
+  },
+  skeletonCard: {
+    flexBasis: "47%",
+    flexGrow: 0,
+    aspectRatio: 0.75,
+    borderRadius: 16,
+  },
+  operationBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  operationText: { fontSize: 12, fontFamily: "Poppins_400Regular" },
   skippedBadge: {
     position: "absolute",
     top: 8,
